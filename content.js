@@ -1,8 +1,8 @@
-// content.js (v17.2 - Bridge)
+// content.js (v21.0 - Data Bridge)
 
-console.log("[Tel Download] Content Bridge v17.2 Loaded");
+console.log("[Tel Download] v21.0 Bridge Loaded");
 
-// Inject UI
+// Inject script
 const script = document.createElement('script');
 script.src = chrome.runtime.getURL('inject.js');
 script.onload = function () { this.remove(); };
@@ -11,13 +11,7 @@ script.onload = function () { this.remove(); };
 // Relay Page -> Background
 window.addEventListener("TelDownloadEvent", (e) => {
   const { action, data } = e.detail;
-  if (action === "download") {
-    chrome.runtime.sendMessage({
-      action: "download_bg",
-      url: data.url,
-      filename: data.filename
-    });
-  }
+  chrome.runtime.sendMessage({ action, data }).catch(() => { });
 });
 
 // Relay Background -> Page
