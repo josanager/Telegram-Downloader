@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Telegram Media Downloader",
+  "version": "1.0",
+  "description": "Download videos and images from Telegram Web, including restricted content.",
+  "permissions": [
+    "activeTab",
+    "downloads",
+    "scripting",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "*://web.telegram.org/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "inject.js",
+        "styles.css"
+      ],
+      "matches": [
+        "*://web.telegram.org/*"
+      ]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://web.telegram.org/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Telegram Downloader"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
