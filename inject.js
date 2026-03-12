@@ -1,7 +1,9 @@
-// inject.js - v22.0 (Stable Base64 Relay)
+// inject.js - v22.1 (Stable Base64 Relay)
 
 (function () {
-    console.log("[Tel Download] v22.0 Base64 Relay Loaded");
+    const currentScript = document.currentScript;
+    const extId = currentScript && currentScript.dataset.extId ? currentScript.dataset.extId : 'default';
+    console.log(`[Tel Download] v22.1 Base64 Relay Loaded (${extId})`);
 
     function createProgressBar(filename) {
         let el = document.getElementById("tmd-progress-container");
@@ -48,7 +50,7 @@
         console.log("[Tel Download] Starting v22.0 Fetch:", url);
         updateProgressUI(5, "Preparando conexión...");
 
-        window.dispatchEvent(new CustomEvent("TelDownloadEvent", {
+        window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
             detail: { action: "relay-start", data: { downloadId, filename } }
         }));
 
@@ -87,7 +89,7 @@
                     }
                     const base64 = btoa(binary);
 
-                    window.dispatchEvent(new CustomEvent("TelDownloadEvent", {
+                    window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                         detail: {
                             action: "relay-chunk",
                             data: { downloadId, base64 }
@@ -105,20 +107,20 @@
             }
 
             updateProgressUI(98, "Guardando...");
-            window.dispatchEvent(new CustomEvent("TelDownloadEvent", {
+            window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                 detail: { action: "relay-end", data: { downloadId } }
             }));
 
         } catch (err) {
-            console.error("[Tel Download] v22.0 Error:", err);
+            console.error("[Tel Download] v22.1 Error:", err);
             updateProgressUI(1, "Error: " + err.message);
-            window.dispatchEvent(new CustomEvent("TelDownloadEvent", {
+            window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                 detail: { action: "relay-error", data: { downloadId, error: err.message } }
             }));
         }
     }
 
-    window.addEventListener("TelExtensionProgress", (e) => {
+    window.addEventListener(`TelExtensionProgress_${extId}`, (e) => {
         const { type, data } = e.detail;
         if (type === 'download-progress') updateProgressUI(data.percent, data.status, data.mb);
         else if (type === 'download-error') updateProgressUI(1, "Error Motor: " + data.error);
