@@ -1,21 +1,19 @@
-/* styles.css */
+/* styles.css – Misil v2.0 */
 
-/* High visibility button on thumbnails */
+/* Download button on thumbnails */
 .tmd-dl-btn {
   position: absolute !important;
   top: 5px !important;
   right: 5px !important;
   width: 32px !important;
   height: 32px !important;
-  background-color: #ff0000 !important;
-  /* DEBUG RED */
+  background-color: #FF3737 !important;
   border-radius: 50% !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   cursor: pointer !important;
   z-index: 2147483647 !important;
-  /* ABSOLUTE MAX */
   box-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
   border: 2px solid white !important;
   pointer-events: auto !important;
@@ -38,7 +36,7 @@
 }
 
 .tmd-viewer-btn:hover {
-  background-color: #3390ec !important;
+  background-color: #FF3737 !important;
 }
 
 .tmd-viewer-btn svg,
@@ -49,7 +47,7 @@
   pointer-events: none;
 }
 
-/* Progress UI - must be above everything */
+/* Progress UI */
 #tmd-progress-container {
   position: fixed;
   bottom: 24px;
@@ -78,7 +76,7 @@
 
 .tmd-progress-bar-fill {
   height: 100%;
-  background: #3390ec;
+  background: #FF3737;
   width: 0%;
   border-radius: 4px;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);

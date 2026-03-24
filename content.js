@@ -1,7 +1,7 @@
-// content.js (v22.1 - Data Bridge with Namespacing)
+// content.js – Misil v2.0 (Data Bridge)
 
 const extId = chrome.runtime.id;
-console.log(`[Tel Download] v22.1 Bridge Loaded (${extId})`);
+console.log(`[Misil] v2.0 Bridge Loaded (${extId})`);
 
 // Inject script
 const script = document.createElement('script');

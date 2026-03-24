@@ -1,8 +1,16 @@
-// offscreen.js - v22.0 (Stable Assembler)
-
-console.log("[Offscreen] v22.0 Assembler Loaded");
+// offscreen.js – Misil v2.0 (Stable Assembler)
 
 const buffers = new Map();
+
+function getMimeType(filename) {
+    const ext = (filename || '').split('.').pop().toLowerCase();
+    const types = {
+        mp4: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska',
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        gif: 'image/gif', webp: 'image/webp'
+    };
+    return types[ext] || 'application/octet-stream';
+}
 
 chrome.runtime.onMessage.addListener((message) => {
     const { type, data } = message;
@@ -17,7 +25,6 @@ chrome.runtime.onMessage.addListener((message) => {
     if (type === 'relay-chunk') {
         const buffer = buffers.get(data.downloadId);
         if (buffer) {
-            // Decode Base64 back to Uint8Array (Zero data loss)
             const binary = atob(data.base64);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) {
@@ -30,8 +37,8 @@ chrome.runtime.onMessage.addListener((message) => {
     if (type === 'relay-end') {
         const buffer = buffers.get(data.downloadId);
         if (buffer) {
-            console.log("[Offscreen] Assembling final video:", buffer.filename);
-            const blob = new Blob(buffer.chunks, { type: 'video/mp4' });
+            const mime = getMimeType(buffer.filename);
+            const blob = new Blob(buffer.chunks, { type: mime });
             const blobUrl = URL.createObjectURL(blob);
 
             chrome.runtime.sendMessage({
@@ -41,7 +48,7 @@ chrome.runtime.onMessage.addListener((message) => {
                     blobUrl,
                     filename: buffer.filename
                 }
-            }).catch(() => { });
+            }).catch(() => {});
 
             buffers.delete(data.downloadId);
         }

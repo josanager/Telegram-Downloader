@@ -1,9 +1,9 @@
-// inject.js - v22.1 (Stable Base64 Relay)
+// inject.js – Misil v2.0 (Base64 Relay)
 
 (function () {
     const currentScript = document.currentScript;
     const extId = currentScript && currentScript.dataset.extId ? currentScript.dataset.extId : 'default';
-    console.log(`[Tel Download] v22.1 Base64 Relay Loaded (${extId})`);
+    console.log(`[Misil] v2.0 Relay Loaded (${extId})`);
 
     function createProgressBar(filename) {
         let el = document.getElementById("tmd-progress-container");
@@ -11,11 +11,11 @@
             el = document.createElement("div");
             el.id = "tmd-progress-container";
             el.innerHTML = `
-                <div style="font-weight:bold;margin-bottom:5px;font-size:14px">Telegram Downloader</div>
+                <div style="font-weight:bold;margin-bottom:5px;font-size:14px">Misil Downloader</div>
                 <div style="font-size:11px;color:#aaa;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="tmd-filename"></div>
                 <div class="tmd-progress-bar-bg"><div class="tmd-progress-bar-fill"></div></div>
                 <div style="display:flex;justify-content:space-between;margin-top:5px">
-                    <span id="tmd-status" style="font-size:12px;color:#3390ec">Iniciando...</span>
+                    <span id="tmd-status" style="font-size:12px;color:#FF3737">Iniciando...</span>
                     <span id="tmd-percent" style="font-size:12px;color:#fff;font-weight:bold">0%</span>
                 </div>
             `;
@@ -47,7 +47,7 @@
 
     async function fetchWithRelay(url, filename) {
         const downloadId = "dl_" + Date.now();
-        console.log("[Tel Download] Starting v22.0 Fetch:", url);
+        console.log("[Misil] Starting fetch:", url);
         updateProgressUI(5, "Preparando conexión...");
 
         window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
@@ -112,7 +112,7 @@
             }));
 
         } catch (err) {
-            console.error("[Tel Download] v22.1 Error:", err);
+            console.error("[Misil] Error:", err);
             updateProgressUI(1, "Error: " + err.message);
             window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                 detail: { action: "relay-error", data: { downloadId, error: err.message } }

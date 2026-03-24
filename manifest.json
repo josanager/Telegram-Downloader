@@ -1,16 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "Telegram Video Downloader Pro",
-  "version": "1.0.1",
+  "name": "Misil - Telegram Downloader",
+  "version": "2.0.0",
   "description": "High-speed media downloader for Telegram Web. Save protected videos and images directly to your Downloads folder.",
   "permissions": [
     "activeTab",
     "downloads",
-    "offscreen"
+    "offscreen",
+    "sidePanel",
+    "storage"
   ],
   "host_permissions": [
     "*://web.telegram.org/*"
   ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "web_accessible_resources": [
     {
       "resources": [
@@ -37,8 +42,7 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Telegram Downloader"
+    "default_title": "Misil"
   },
   "background": {
     "service_worker": "background.js"
