@@ -21,18 +21,22 @@ window.addEventListener(`TelDownloadEvent_${extId}`, async (e) => {
     const { sb_session } = await chrome.storage.local.get(['sb_session']);
     if (!sb_session) {
       // Not logged in → open side panel
-      chrome.runtime.sendMessage({ action: 'open-sidepanel' });
+      chrome.runtime.sendMessage({ action: 'open-sidepanel' }).catch(() => {});
       return;
     }
     // Logged in → forward to side panel
-    chrome.runtime.sendMessage({ type: 'media-added', data }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'media-added', data }).catch(() => {
+        if (chrome.runtime.lastError) console.debug("[Misil] sidepanel closed or not receiving message.");
+    });
     // Also open side panel so user sees it appear
-    chrome.runtime.sendMessage({ action: 'open-sidepanel' });
+    chrome.runtime.sendMessage({ action: 'open-sidepanel' }).catch(() => {});
     return;
   }
 
   // All relay actions (relay-start, relay-chunk, relay-end, relay-error)
-  chrome.runtime.sendMessage({ action, data }).catch(() => {});
+  chrome.runtime.sendMessage({ action, data }).catch((err) => {
+      if (chrome.runtime.lastError) console.error("[Misil] Background script messaging error:", chrome.runtime.lastError.message);
+  });
 });
 
 // Relay: Background → Page

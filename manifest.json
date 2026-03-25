@@ -3,6 +3,7 @@
   "name": "Misil - Telegram Downloader",
   "version": "2.1.0",
   "description": "High-speed media downloader for Telegram Web. Save protected videos and images directly to your Downloads folder.",
+  "minimum_chrome_version": "114",
   "permissions": [
     "activeTab",
     "downloads",

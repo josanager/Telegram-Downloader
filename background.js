@@ -1,22 +1,34 @@
 // background.js – Misil v2.0 (Relay Orchestrator)
 
 async function setupOffscreen() {
-  const contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
-  if (contexts.length > 0) return;
-  await chrome.offscreen.createDocument({
-    url: 'offscreen.html',
-    reasons: ['BLOBS'],
-    justification: 'Assemble video blobs from page fragments.'
-  });
+  if (!chrome.offscreen) {
+    console.warn("[Misil] chrome.offscreen API not available.");
+    return;
+  }
+  try {
+    const contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
+    if (contexts.length > 0) return;
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['BLOBS'],
+      justification: 'Assemble video blobs from page fragments.'
+    });
+  } catch (error) {
+    console.error("[Misil] Error creating offscreen document:", error);
+  }
 }
 
 // Open side panel when user clicks the extension icon
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+if (chrome.sidePanel) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+} else {
+  console.warn("[Misil] chrome.sidePanel API not available.");
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Allow inject.js (via content.js) to open the side panel
   if (message.action === 'open-sidepanel') {
-    if (sender.tab && sender.tab.id) {
+    if (chrome.sidePanel && sender.tab && sender.tab.id) {
       chrome.sidePanel.open({ tabId: sender.tab.id }).catch(() => {});
     }
     return;
@@ -27,12 +39,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       checkQuota(sender.tab ? sender.tab.id : null).then((canDownload) => {
         if (canDownload) {
           setupOffscreen().then(() => {
-            chrome.runtime.sendMessage({ type: message.action, data: message.data });
+            chrome.runtime.sendMessage({ type: message.action, data: message.data }).catch((err) => {
+              if (chrome.runtime.lastError) console.warn("Relay error:", chrome.runtime.lastError.message);
+            });
           });
         }
       });
     } else {
-      chrome.runtime.sendMessage({ type: message.action, data: message.data }).catch(() => {});
+      chrome.runtime.sendMessage({ type: message.action, data: message.data }).catch((err) => {
+        if (chrome.runtime.lastError) console.warn("Relay error:", chrome.runtime.lastError.message);
+      });
     }
     return;
   }
@@ -52,6 +68,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         saveToHistory(message.data.filename);
       }
     });
+    return;
   }
 
   // Relay progress/error back to page
@@ -81,8 +98,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function queryAndRelay(message) {
-  const tabs = await chrome.tabs.query({ url: "*://web.telegram.org/*" });
-  tabs.forEach(tab => chrome.tabs.sendMessage(tab.id, message).catch(() => {}));
+  try {
+    const tabs = await chrome.tabs.query({ url: "*://web.telegram.org/*" });
+    tabs.forEach(tab => chrome.tabs.sendMessage(tab.id, message).catch(() => {
+      if (chrome.runtime.lastError) {
+        // Suppress expected errors when the tab has closed or script hasn't loaded
+      }
+    }));
+  } catch (err) {
+    console.error("[Misil] Error querying tabs:", err);
+  }
 }
 
 // --- QUOTA (Supabase Synced) ---
@@ -90,7 +115,7 @@ async function checkQuota(tabId) {
   const { sb_session } = await chrome.storage.local.get(['sb_session']);
   if (!sb_session) {
       // Open the side panel so the user can log in
-      if (tabId) chrome.sidePanel.open({ tabId }).catch(() => {});
+      if (chrome.sidePanel && tabId) chrome.sidePanel.open({ tabId }).catch(() => {});
       return false;
   }
 

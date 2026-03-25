@@ -83,7 +83,7 @@ function setupAuthListeners() {
             else await SupabaseClient.signUp(email, pwd);
             showDashboard();
         } catch (err) {
-            errorMsg.textContent = err.message;
+            errorMsg.textContent = err.message || 'Error de conexión';
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = isLoginMode ? 'Entrar' : 'Crear Cuenta';
@@ -91,8 +91,13 @@ function setupAuthListeners() {
     };
 
     document.getElementById('logout-btn').onclick = async () => {
-        await SupabaseClient.signOut();
-        showAuth();
+        try {
+            await SupabaseClient.signOut();
+        } catch (e) {
+            console.error("[Misil] Sign out error:", e);
+        } finally {
+            showAuth();
+        }
     };
 }
 
