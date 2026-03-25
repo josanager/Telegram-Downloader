@@ -1,4 +1,4 @@
-// sidepanel.js – Misil v2.1 (Auth + Dashboard + Media Scanner)
+// sidepanel.js – Misil v2.1
 
 let isLoginMode = true;
 
@@ -16,11 +16,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const historyData = await chrome.storage.local.get(['download_history']);
     renderHistory(historyData.download_history || []);
 
-    // Listen for live updates
     chrome.runtime.onMessage.addListener((message) => {
         if (message.type === 'quota-update') updateQuota(message.count);
         if (message.type === 'history-updated') renderHistory(message.history);
-        if (message.type === 'media-detected') addMediaItem(message.data);
     });
 });
 
@@ -76,18 +74,10 @@ function setupAuthListeners() {
         const username = userInput.value.trim();
         const pwd = passInput.value.trim();
 
-        if (!username || !pwd) {
-            errorMsg.textContent = 'Llena todos los campos.';
-            return;
-        }
+        if (!username || !pwd) { errorMsg.textContent = 'Llena todos los campos.'; return; }
+        if (pwd.length < 6) { errorMsg.textContent = 'Mínimo 6 caracteres en la contraseña.'; return; }
 
-        if (pwd.length < 6) {
-            errorMsg.textContent = 'La contraseña debe tener al menos 6 caracteres.';
-            return;
-        }
-
-        // Convert username to a fake email for Supabase (it requires email format)
-        const fakeEmail = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@misil.app`;
+        const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@misil.app`;
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Conectando...';
@@ -95,9 +85,9 @@ function setupAuthListeners() {
 
         try {
             if (isLoginMode) {
-                await SupabaseClient.signIn(fakeEmail, pwd);
+                await SupabaseClient.signIn(email, pwd);
             } else {
-                await SupabaseClient.signUp(fakeEmail, pwd);
+                await SupabaseClient.signUp(email, pwd);
             }
             showDashboard();
         } catch (err) {
@@ -114,7 +104,7 @@ function setupAuthListeners() {
     };
 }
 
-// ── TAB SWITCHER ──
+// ── TABS ──
 function setupTabSwitcher() {
     const tabMedia = document.getElementById('tab-media');
     const tabHistory = document.getElementById('tab-history');
@@ -122,17 +112,12 @@ function setupTabSwitcher() {
     const panelHistory = document.getElementById('panel-history');
 
     tabMedia.onclick = () => {
-        tabMedia.classList.add('active');
-        tabHistory.classList.remove('active');
-        panelMedia.classList.remove('hidden');
-        panelHistory.classList.add('hidden');
+        tabMedia.classList.add('active'); tabHistory.classList.remove('active');
+        panelMedia.classList.remove('hidden'); panelHistory.classList.add('hidden');
     };
-
     tabHistory.onclick = () => {
-        tabHistory.classList.add('active');
-        tabMedia.classList.remove('active');
-        panelHistory.classList.remove('hidden');
-        panelMedia.classList.add('hidden');
+        tabHistory.classList.add('active'); tabMedia.classList.remove('active');
+        panelHistory.classList.remove('hidden'); panelMedia.classList.add('hidden');
     };
 }
 
@@ -141,73 +126,22 @@ function updateQuota(count) {
     const limit = 100;
     document.getElementById('current-count').textContent = count;
     document.getElementById('remaining-count').textContent = Math.max(0, limit - count);
-
     const radius = 34;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (count / limit) * circumference;
     document.getElementById('circle-fill').style.strokeDashoffset = offset;
 }
 
-// ── MEDIA SCANNER ──
-const detectedUrls = new Set();
-
-function addMediaItem(data) {
-    if (detectedUrls.has(data.src)) return;
-    detectedUrls.add(data.src);
-
-    const list = document.getElementById('media-list');
-    const empty = document.getElementById('media-empty');
-    if (empty) empty.style.display = 'none';
-
-    const div = document.createElement('div');
-    div.className = 'm-item';
-
-    const thumbHtml = data.poster
-        ? `<img src="${data.poster}" alt="">`
-        : '';
-
-    div.innerHTML = `
-        <div class="m-thumb">
-            ${thumbHtml}
-            <span class="play-badge">▶</span>
-        </div>
-        <div class="m-info">
-            <div class="m-name" title="${data.name}">${data.name}</div>
-            <div class="m-size">${data.type || 'Video'}</div>
-        </div>
-    `;
-
-    const dlBtn = document.createElement('button');
-    dlBtn.className = 'm-dl-btn';
-    dlBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
-    dlBtn.onclick = () => {
-        // Tell the content script to trigger download for this specific video
-        chrome.tabs.query({ url: "*://web.telegram.org/*" }, (tabs) => {
-            if (tabs.length > 0) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    type: 'trigger-download',
-                    data: { src: data.src, name: data.name }
-                });
-            }
-        });
-    };
-
-    div.appendChild(dlBtn);
-    list.appendChild(div);
-}
-
 // ── HISTORY ──
 function renderHistory(history) {
     const list = document.getElementById('history-list');
     const empty = document.getElementById('empty-state');
-
     list.querySelectorAll('.h-item').forEach(el => el.remove());
 
     if (!history || history.length === 0) {
         empty.style.display = 'block';
         return;
     }
-
     empty.style.display = 'none';
 
     history.forEach(item => {
