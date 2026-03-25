@@ -4,11 +4,8 @@ let isLoginMode = true;
 
 document.addEventListener('DOMContentLoaded', async () => {
     const session = await SupabaseClient.getSession();
-    if (session) {
-        showDashboard();
-    } else {
-        showAuth();
-    }
+    if (session) showDashboard();
+    else showAuth();
 
     setupAuthListeners();
     setupTabSwitcher();
@@ -19,6 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.runtime.onMessage.addListener((message) => {
         if (message.type === 'quota-update') updateQuota(message.count);
         if (message.type === 'history-updated') renderHistory(message.history);
+        if (message.type === 'media-added') addMediaToPanel(message.data);
     });
 });
 
@@ -34,7 +32,6 @@ async function showDashboard() {
     document.getElementById('auth-view').classList.add('hidden');
     document.getElementById('dashboard-view').classList.remove('hidden');
     document.getElementById('plan-tag').classList.add('on');
-
     try {
         const profile = await SupabaseClient.getProfile();
         if (profile) {
@@ -73,22 +70,17 @@ function setupAuthListeners() {
     submitBtn.onclick = async () => {
         const username = userInput.value.trim();
         const pwd = passInput.value.trim();
-
         if (!username || !pwd) { errorMsg.textContent = 'Llena todos los campos.'; return; }
         if (pwd.length < 6) { errorMsg.textContent = 'Mínimo 6 caracteres en la contraseña.'; return; }
 
         const email = `${username.toLowerCase().replace(/[^a-z0-9]/g, '')}@misil.app`;
-
         submitBtn.disabled = true;
         submitBtn.textContent = 'Conectando...';
         errorMsg.textContent = '';
 
         try {
-            if (isLoginMode) {
-                await SupabaseClient.signIn(email, pwd);
-            } else {
-                await SupabaseClient.signUp(email, pwd);
-            }
+            if (isLoginMode) await SupabaseClient.signIn(email, pwd);
+            else await SupabaseClient.signUp(email, pwd);
             showDashboard();
         } catch (err) {
             errorMsg.textContent = err.message;
@@ -132,6 +124,65 @@ function updateQuota(count) {
     document.getElementById('circle-fill').style.strokeDashoffset = offset;
 }
 
+// ── MEDIA PANEL ──
+const addedThumbs = new Set();
+
+function addMediaToPanel(data) {
+    if (addedThumbs.has(data.thumbId)) return;
+    addedThumbs.add(data.thumbId);
+
+    const list = document.getElementById('media-list');
+    const empty = document.getElementById('media-empty');
+    if (empty) empty.style.display = 'none';
+
+    // Switch to multimedia tab
+    document.getElementById('tab-media').click();
+
+    const item = document.createElement('div');
+    item.className = 'm-item';
+    item.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);';
+
+    const thumbHtml = data.thumbnail
+        ? `<div style="width:50px;height:36px;border-radius:6px;overflow:hidden;flex-shrink:0;background:rgba(255,255,255,0.05);">
+             <img src="${data.thumbnail}" style="width:100%;height:100%;object-fit:cover;">
+           </div>`
+        : `<div style="width:50px;height:36px;border-radius:6px;flex-shrink:0;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;font-size:18px;">
+             ${data.type === 'Video' ? '🎬' : '🖼️'}
+           </div>`;
+
+    item.innerHTML = `
+        ${thumbHtml}
+        <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${data.name}">${data.name}</div>
+            <div style="font-size:10px;color:#64748b;margin-top:2px;">${data.type}</div>
+        </div>
+    `;
+
+    // Download button
+    const dlBtn = document.createElement('button');
+    dlBtn.style.cssText = 'width:32px;height:32px;border-radius:8px;background:#FF3737;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform 0.1s;';
+    dlBtn.innerHTML = '<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:white;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
+    dlBtn.title = "Descargar";
+    dlBtn.onmouseover = () => dlBtn.style.transform = 'scale(1.1)';
+    dlBtn.onmouseout = () => dlBtn.style.transform = 'scale(1)';
+    dlBtn.onclick = () => {
+        dlBtn.disabled = true;
+        dlBtn.innerHTML = '<div style="width:14px;height:14px;border:2px solid white;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;"></div>';
+        // Tell the page to open the viewer for this media and auto-download
+        chrome.tabs.query({ url: "*://web.telegram.org/*" }, (tabs) => {
+            if (tabs.length > 0) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    type: 'trigger-panel-download',
+                    data: { thumbId: data.thumbId }
+                });
+            }
+        });
+    };
+
+    item.appendChild(dlBtn);
+    list.appendChild(item);
+}
+
 // ── HISTORY ──
 function renderHistory(history) {
     const list = document.getElementById('history-list');
@@ -147,18 +198,21 @@ function renderHistory(history) {
     history.forEach(item => {
         const li = document.createElement('li');
         li.className = 'h-item';
+        li.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);';
         const isVideo = /\.(mp4|webm|mkv)$/i.test(item.name);
-        const iconSvg = isVideo
-            ? '<svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>'
-            : '<svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
-
+        const icon = isVideo ? '🎬' : '🖼️';
         li.innerHTML = `
-            <div class="h-icon">${iconSvg}</div>
-            <div class="h-info">
-                <div class="h-name" title="${item.name}">${item.name}</div>
-                <div class="h-date">${item.date}</div>
+            <div style="width:34px;height:34px;border-radius:8px;background:rgba(255,55,55,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">${icon}</div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${item.name}">${item.name}</div>
+                <div style="font-size:10px;color:#64748b;margin-top:2px;">${item.date}</div>
             </div>
         `;
         list.appendChild(li);
     });
 }
+
+// Add spin animation
+const style = document.createElement('style');
+style.textContent = '@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
+document.head.appendChild(style);

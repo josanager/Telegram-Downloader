@@ -21,7 +21,8 @@
     {
       "resources": [
         "inject.js",
-        "styles.css"
+        "styles.css",
+        "icons/logo.svg"
       ],
       "matches": [
         "*://web.telegram.org/*"

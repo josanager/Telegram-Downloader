@@ -11,34 +11,41 @@ script.dataset.iconUrl = chrome.runtime.getURL('icons/logo.svg');
 script.onload = function () { this.remove(); };
 (document.head || document.documentElement).appendChild(script);
 
-// Relay Page → Background
+// Relay: Page → Background
 window.addEventListener(`TelDownloadEvent_${extId}`, async (e) => {
   const { action, data } = e.detail;
 
-  if (action === 'user-icon-click') {
-    // Check auth state before allowing any download
+  // User clicked Misil icon on a media → add to panel
+  if (action === 'add-to-panel') {
+    // Check if user is logged in
     const { sb_session } = await chrome.storage.local.get(['sb_session']);
     if (!sb_session) {
-      // Not logged in: open the side panel and abort download
+      // Not logged in → open side panel
       chrome.runtime.sendMessage({ action: 'open-sidepanel' });
-      // Signal inject.js to cancel pending download
-      window.dispatchEvent(new CustomEvent(`TelExtensionProgress_${extId}`, {
-        detail: { type: 'auth-required' }
-      }));
+      return;
     }
-    // If authed, inject.js proceeds normally with pendingDownload flag
+    // Logged in → forward to side panel
+    chrome.runtime.sendMessage({ type: 'media-added', data }).catch(() => {});
+    // Also open side panel so user sees it appear
+    chrome.runtime.sendMessage({ action: 'open-sidepanel' });
     return;
   }
 
-  // All other actions (relay-start, relay-chunk, relay-end, relay-error)
+  // All relay actions (relay-start, relay-chunk, relay-end, relay-error)
   chrome.runtime.sendMessage({ action, data }).catch(() => {});
 });
 
-// Relay Background → Page (progress, errors)
+// Relay: Background → Page
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'download-progress' || message.type === 'download-error') {
     window.dispatchEvent(new CustomEvent(`TelExtensionProgress_${extId}`, {
       detail: message
+    }));
+  }
+  // Panel requested download for a specific media → tell inject.js
+  if (message.type === 'trigger-panel-download') {
+    window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
+      detail: { action: 'trigger-panel-download', data: message.data }
     }));
   }
 });

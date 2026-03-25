@@ -1,12 +1,10 @@
-// inject.js – Misil v2.1 (Manual Trigger, Logo Button)
+// inject.js – Misil v2.1 (Logo Button + Add to Panel Flow)
 
 (function () {
     const currentScript = document.currentScript;
     const extId = currentScript && currentScript.dataset.extId ? currentScript.dataset.extId : 'default';
     const iconUrl = currentScript && currentScript.dataset.iconUrl ? currentScript.dataset.iconUrl : '';
     console.log(`[Misil] v2.1 Loaded (${extId})`);
-
-    let pendingDownload = false; // set to true when user clicks thumbnail icon → auto-trigger when viewer opens
 
     // ── PROGRESS OVERLAY ──
 
@@ -15,25 +13,16 @@
         if (!el) {
             el = document.createElement("div");
             el.id = "tmd-progress-container";
-            el.style.cssText = `
-                position:fixed;bottom:20px;left:20px;z-index:99999;
-                background:rgba(15,23,42,0.95);color:white;
-                border-radius:14px;padding:14px 18px;min-width:260px;max-width:320px;
-                box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:Inter,sans-serif;
-                border:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(12px);
-            `;
             el.innerHTML = `
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                    ${iconUrl ? `<img src="${iconUrl}" style="width:24px;height:24px;object-fit:contain;">` : ''}
-                    <span style="font-weight:700;font-size:13px">Misil Downloader</span>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                    ${iconUrl ? `<img src="${iconUrl}" style="width:22px;height:22px;">` : ''}
+                    <span style="font-weight:700;font-size:13px;">Misil Downloader</span>
                 </div>
-                <div style="font-size:11px;color:#94a3b8;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="tmd-filename"></div>
-                <div style="background:rgba(255,255,255,0.06);border-radius:6px;height:4px;overflow:hidden;">
-                    <div id="tmd-bar" style="height:100%;background:#FF3737;border-radius:6px;width:0%;transition:width .3s ease;"></div>
-                </div>
-                <div style="display:flex;justify-content:space-between;margin-top:8px;">
-                    <span id="tmd-status" style="font-size:11px;color:#FF3737;">Iniciando...</span>
-                    <span id="tmd-percent" style="font-size:11px;color:#fff;font-weight:700;">0%</span>
+                <div style="font-size:11px;color:#aaa;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="tmd-filename"></div>
+                <div class="tmd-progress-bar-bg"><div class="tmd-progress-bar-fill" id="tmd-bar"></div></div>
+                <div style="display:flex;justify-content:space-between;margin-top:5px;">
+                    <span id="tmd-status" style="font-size:11px;color:#FF3737">Iniciando...</span>
+                    <span id="tmd-percent" style="font-size:11px;color:white;font-weight:700">0%</span>
                 </div>
             `;
             document.body.appendChild(el);
@@ -42,7 +31,7 @@
         return el;
     }
 
-    function updateProgressUI(percent, text, mb = null) {
+    function updateProgressUI(percent, text, mb) {
         const el = document.getElementById("tmd-progress-container");
         if (!el) return;
         const bar = el.querySelector("#tmd-bar");
@@ -51,7 +40,7 @@
         if (bar) bar.style.width = percent + "%";
         if (status) {
             status.textContent = mb ? `${text} (${mb.toFixed(1)} MB)` : text;
-            status.style.color = percent >= 100 ? "#22c55e" : percent < 5 ? "#FF3737" : "#94a3b8";
+            status.style.color = percent >= 100 ? "#22c55e" : "#94a3b8";
         }
         if (per) per.textContent = Math.floor(percent) + "%";
         if (percent >= 100) {
@@ -60,10 +49,11 @@
         }
     }
 
-    // ── RELAY DOWNLOAD ──
+    // ── RELAY DOWNLOAD (page-context fetch, has Telegram cookies) ──
 
     async function fetchWithRelay(url, filename) {
         const downloadId = "dl_" + Date.now();
+        createProgressBar(filename);
         updateProgressUI(2, "Conectando...");
 
         window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
@@ -71,56 +61,42 @@
         }));
 
         try {
-            let received = 0;
-            let total = 0;
-            let isComplete = false;
-
+            let received = 0, total = 0, isComplete = false;
             while (!isComplete) {
                 const headers = new Headers();
                 if (received > 0) headers.set('Range', `bytes=${received}-`);
-
                 const response = await fetch(url, { headers, credentials: 'include' });
                 if (!response.ok && response.status !== 206) throw new Error(`HTTP ${response.status}`);
 
                 if (received === 0) {
-                    const contentRange = response.headers.get('Content-Range');
-                    if (contentRange) {
-                        const match = contentRange.match(/\/(\d+)$/);
-                        if (match) total = parseInt(match[1], 10);
-                    } else {
-                        total = parseInt(response.headers.get('Content-Length'), 10) || 0;
-                    }
+                    const cr = response.headers.get('Content-Range');
+                    if (cr) { const m = cr.match(/\/(\d+)$/); if (m) total = parseInt(m[1]); }
+                    else total = parseInt(response.headers.get('Content-Length')) || 0;
                 }
 
                 const reader = response.body.getReader();
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-                    let binary = '';
-                    for (let i = 0; i < value.byteLength; i++) {
-                        binary += String.fromCharCode(value[i]);
-                    }
-                    const base64 = btoa(binary);
+                    let bin = ''; for (let i = 0; i < value.byteLength; i++) bin += String.fromCharCode(value[i]);
                     window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
-                        detail: { action: "relay-chunk", data: { downloadId, base64 } }
+                        detail: { action: "relay-chunk", data: { downloadId, base64: btoa(bin) } }
                     }));
                     received += value.length;
-                    const percent = total ? (received / total) * 100 : Math.min(10 + (received / 1048576), 95);
-                    updateProgressUI(percent, "Descargando", received / 1048576);
+                    const pct = total ? (received / total) * 100 : Math.min(10 + received / 1048576, 95);
+                    updateProgressUI(pct, "Descargando", received / 1048576);
                 }
 
                 if (total && received >= total) isComplete = true;
                 else if (response.status === 200) isComplete = true;
                 else if (received === 0) throw new Error("Sin datos");
             }
-
             updateProgressUI(98, "Guardando...");
             window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                 detail: { action: "relay-end", data: { downloadId } }
             }));
-
         } catch (err) {
-            console.error("[Misil] Fetch error:", err);
+            console.error("[Misil] Error:", err);
             updateProgressUI(1, "Error: " + err.message);
             window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                 detail: { action: "relay-error", data: { downloadId, error: err.message } }
@@ -128,115 +104,153 @@
         }
     }
 
-    // ── TRIGGER HELPER ──
+    // ── TRIGGER FROM VIEWER (fresh URL, page context = has cookies) ──
 
-    function triggerDownloadFromVideo(video) {
-        const src = video.currentSrc || video.src;
-        if (!src || src.startsWith('blob:') || src.length < 10) return false;
-        const filename = "telegram_video_" + Date.now() + ".mp4";
-        createProgressBar(filename);
-        fetchWithRelay(src, filename);
-        return true;
-    }
+    let pendingDownloadFromPanel = false;
 
-    // ── LOGO BUTTON BUILDER ──
-
-    function buildMisilButton(className, title) {
-        const btn = document.createElement("div");
-        btn.className = className;
-        btn.title = title;
-        if (iconUrl) {
-            btn.innerHTML = `<img src="${iconUrl}" draggable="false">`;
-        } else {
-            // Generico en caso de fallo crítico
-            btn.innerHTML = '<svg viewBox="0 0 24 24" style="fill:#FF3737;width:24px;height:24px;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
+    function triggerDownloadFromViewer() {
+        const vid = document.querySelector(
+            ".media-viewer-aspecter video, #MediaViewer video, .media-viewer-whole video, .ckin__player video"
+        );
+        if (vid && (vid.currentSrc || vid.src)) {
+            const src = vid.currentSrc || vid.src;
+            if (!src.startsWith('blob:') && src.length > 10) {
+                const filename = "telegram_video_" + Date.now() + ".mp4";
+                fetchWithRelay(src, filename);
+                return true;
+            }
         }
-        return btn;
+        return false;
     }
 
     // ── INJECT ──
 
     function inject() {
-        // --- VIEWER BUTTON (Adentro del video abierto) ---
+        // --- VIEWER: Auto-download if triggered from panel ---
         const header = document.querySelector(".media-viewer-header, .media-viewer-buttons, .viewer-buttons");
-        if (header && !header.querySelector(".tmd-viewer-btn")) {
-            const viewerVideo = document.querySelector(".media-viewer-aspecter video, #MediaViewer video, .media-viewer-whole video, .ckin__player video");
-            if (viewerVideo && (viewerVideo.src || viewerVideo.currentSrc)) {
-                if (pendingDownload) {
-                    pendingDownload = false; // reset
-                    triggerDownloadFromVideo(viewerVideo);
+        if (header) {
+            if (pendingDownloadFromPanel) {
+                pendingDownloadFromPanel = false;
+                // Wait a moment for the video to fully load
+                setTimeout(() => {
+                    if (!triggerDownloadFromViewer()) {
+                        setTimeout(() => triggerDownloadFromViewer(), 2000);
+                    }
+                }, 800);
+            }
+            // Add Misil button to viewer header
+            if (!header.querySelector(".tmd-viewer-btn")) {
+                const vid = document.querySelector(".media-viewer-aspecter video, #MediaViewer video, .media-viewer-whole video, .ckin__player video");
+                if (vid && (vid.src || vid.currentSrc)) {
+                    const btn = document.createElement("div");
+                    btn.className = "tmd-viewer-btn";
+                    btn.title = "Descargar con Misil";
+                    btn.innerHTML = iconUrl ? `<img src="${iconUrl}">` : '⬇️';
+                    btn.onclick = (e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        triggerDownloadFromViewer();
+                    };
+                    header.insertBefore(btn, header.firstChild);
                 }
-                const btn = buildMisilButton("tmd-viewer-btn", "Descargar con Misil");
-                btn.onclick = (e) => {
-                    e.preventDefault(); e.stopPropagation();
-                    const currentVid = document.querySelector(".media-viewer-aspecter video, #MediaViewer video, .media-viewer-whole video, .ckin__player video") || viewerVideo;
-                    triggerDownloadFromVideo(currentVid);
-                };
-                header.insertBefore(btn, header.firstChild);
             }
         }
 
-        // --- THUMBNAIL BUTTONS (Al lado derecho del chat bubble) ---
-        const thumbs = document.querySelectorAll(".media-inner, .album-item-video, .media-video, .media-inner.interactive");
-        thumbs.forEach(thumb => {
-            if (thumb.dataset.misilInjected) return;
-            
-            const isVid = thumb.querySelector("video, .icon-play, .video-time");
-            const isImg = thumb.querySelector("img.full-image, img.thumbnail");
+        // --- CHAT: Add Misil logo beside each media bubble ---
+        const mediaElements = document.querySelectorAll(".media-inner, .album-item-video, .media-video");
+        mediaElements.forEach(media => {
+            if (media.dataset.misilDone) return;
+            const isVid = media.querySelector("video, .icon-play, .video-time");
+            const isImg = media.querySelector("img");
             if (!isVid && !isImg) return;
-            
-            thumb.dataset.misilInjected = "true";
+            media.dataset.misilDone = "true";
 
-            // Encontrar contenedor seguro para que el absolute right:-32px funcione sin ser cortado
-            let targetParent = thumb.parentElement;
-            if (getComputedStyle(targetParent).position === "static") {
-                targetParent.style.position = "relative";
-            }
-            // Asegurar que no hay overflow hidden bloqueando el logo externo
-            if (getComputedStyle(targetParent).overflow === "hidden") {
-                targetParent.style.overflow = "visible";
-            }
+            // Find the message row — we'll put our button as a sibling after the bubble
+            const messageEl = media.closest('.Message, .message, .bubble');
+            if (!messageEl) return;
 
-            const btn = buildMisilButton("tmd-dl-btn", "Descargar con Misil");
+            // Check if we already added a button to this message
+            if (messageEl.querySelector('.tmd-dl-btn')) return;
+
+            // Create the Misil logo button
+            const btn = document.createElement("div");
+            btn.className = "tmd-dl-btn";
+            btn.title = "Añadir a Misil";
+            btn.innerHTML = iconUrl ? `<img src="${iconUrl}">` : '🔴';
             btn.onclick = (e) => {
-                e.preventDefault(); e.stopPropagation(); // Evita que se abra el viewer
-                
-                // Extraer el link sin abrir
-                const mediaEl = thumb.querySelector("video, img.full-image, img.thumbnail");
-                const src = mediaEl ? (mediaEl.currentSrc || mediaEl.src) : null;
-                
-                if (src) {
-                    const filename = "telegram_media_" + Date.now() + (isVid ? ".mp4" : ".jpg");
-                    createProgressBar(filename);
-                    
-                    if (src.startsWith('blob:')) {
-                        // Blob local: usar motor interno base64 (fetch funciona en el scope local)
-                        fetchWithRelay(src, filename);
-                    } else {
-                        // URL externa: delegar a Background para evitar CORS Error (Failed to fetch)
-                        window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
-                            detail: { action: "request-direct-download", data: { src, filename } }
-                        }));
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Capture media info RIGHT NOW (fresh)
+                const mediaEl = media.querySelector("video, img");
+                const poster = media.querySelector("video") ? (media.querySelector("video").poster || '') : '';
+                const thumbImg = media.querySelector("img");
+                const thumbnail = thumbImg ? thumbImg.src : poster;
+                const type = isVid ? 'Video' : 'Foto';
+                const name = "telegram_" + (isVid ? "video" : "foto") + "_" + Date.now() + (isVid ? ".mp4" : ".jpg");
+
+                // Store a reference to this specific thumbnail for later download trigger
+                const thumbIndex = Date.now().toString();
+                media.dataset.misilThumbId = thumbIndex;
+
+                // Send to side panel
+                window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
+                    detail: {
+                        action: "add-to-panel",
+                        data: { name, type, thumbnail, thumbId: thumbIndex }
                     }
-                } else {
-                    updateProgressUI(1, "No se encontró enlace multimedia");
-                }
+                }));
+
+                // Visual feedback
+                btn.style.opacity = "0.4";
+                btn.style.pointerEvents = "none";
+                setTimeout(() => {
+                    btn.style.opacity = "1";
+                    btn.style.pointerEvents = "auto";
+                }, 2000);
             };
-            targetParent.appendChild(btn);
+
+            // Insert the button AFTER the message bubble content, to the right
+            // We need to find the right place in the DOM to ensure it's beside the bubble
+            const contentWrapper = messageEl.querySelector('.message-content-wrapper, .bubble-content-wrapper, .content-inner');
+            if (contentWrapper) {
+                contentWrapper.style.display = "flex";
+                contentWrapper.style.alignItems = "center";
+                contentWrapper.appendChild(btn);
+            } else {
+                // Fallback: just append to the message and position absolutely
+                messageEl.style.position = "relative";
+                btn.style.position = "absolute";
+                btn.style.right = "-36px";
+                btn.style.top = "50%";
+                btn.style.transform = "translateY(-50%)";
+                messageEl.appendChild(btn);
+            }
         });
     }
 
-    // ── LISTENERS ──
+    // ── LISTEN FOR DOWNLOAD TRIGGER FROM SIDE PANEL ──
+
+    window.addEventListener(`TelDownloadEvent_${extId}`, (e) => {
+        if (!e.detail) return;
+
+        // Side panel requested download → open the viewer for that media
+        if (e.detail.action === 'trigger-panel-download') {
+            const thumbId = e.detail.data.thumbId;
+            const targetMedia = document.querySelector(`[data-misil-thumb-id="${thumbId}"]`);
+            if (targetMedia) {
+                pendingDownloadFromPanel = true;
+                targetMedia.click(); // Opens the media viewer with fresh URL
+            }
+            return;
+        }
+    }, true);
+
+    // ── LISTEN FOR PROGRESS FROM BACKGROUND ──
 
     window.addEventListener(`TelExtensionProgress_${extId}`, (e) => {
         const { type, data } = e.detail;
         if (type === 'download-progress') updateProgressUI(data.percent, data.status, data.mb);
-        else if (type === 'download-error') {
-            updateProgressUI(1, "⛔ " + data.error);
-            pendingDownload = false; // reset pending on error
-        } else if (type === 'auth-required') {
-            pendingDownload = false; // reset — side panel will open
-        }
+        else if (type === 'download-error') updateProgressUI(1, "⛔ " + data.error);
     });
 
     setInterval(inject, 2000);

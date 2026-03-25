@@ -37,43 +37,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
-  // --- NATIVE FILE DOWNLOAD (Bypasses CORS) ---
-  if (message.action === 'request-direct-download') {
-    checkQuota(sender.tab ? sender.tab.id : null).then((canDownload) => {
-      if (!canDownload) return;
-      
-      const { src, filename } = message.data;
-      
-      chrome.downloads.download({
-        url: src,
-        filename: filename,
-        saveAs: false,
-        conflictAction: 'uniquify'
-      }, (downloadId) => {
-        if (chrome.runtime.lastError) {
-          queryAndRelay({ type: 'download-error', data: { error: chrome.runtime.lastError.message } });
-        } else {
-          // Tell UI it started
-          queryAndRelay({ type: 'download-progress', data: { percent: 15, status: 'Iniciando conexión segura...' } });
-          
-          chrome.downloads.onChanged.addListener(function trackProgress(delta) {
-             if (delta.id === downloadId) {
-                if (delta.state && delta.state.current === 'complete') {
-                    queryAndRelay({ type: 'download-progress', data: { percent: 100, status: '¡Descargado!' } });
-                    saveToHistory(filename);
-                    chrome.downloads.onChanged.removeListener(trackProgress);
-                } else if (delta.state && delta.state.current === 'interrupted') {
-                    queryAndRelay({ type: 'download-error', data: { error: 'Descarga interrumpida por el navegador.' } });
-                    chrome.downloads.onChanged.removeListener(trackProgress);
-                }
-             }
-          });
-        }
-      });
-    });
-    return;
-  }
-
   // Download complete from offscreen
   if (message.type === 'download-complete') {
     chrome.downloads.download({
