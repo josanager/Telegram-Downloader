@@ -3,48 +3,55 @@
 /* Download button on thumbnails */
 .tmd-dl-btn {
   position: absolute !important;
-  top: 5px !important;
-  right: 5px !important;
-  width: 32px !important;
-  height: 32px !important;
-  background-color: #FF3737 !important;
-  border-radius: 50% !important;
+  top: 50% !important;
+  right: -32px !important;
+  transform: translateY(-50%) !important;
+  width: 28px !important;
+  height: 28px !important;
+  background-color: transparent !important;
+  border-radius: 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   cursor: pointer !important;
   z-index: 2147483647 !important;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8) !important;
-  border: 2px solid white !important;
+  box-shadow: none !important;
+  border: none !important;
   pointer-events: auto !important;
-  visibility: visible !important;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* Button for Media Viewer */
+.tmd-dl-btn:hover {
+  transform: translateY(-50%) scale(1.15) !important;
+}
+
+/* Button inside Media Viewer */
 .tmd-viewer-btn {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 44px !important;
-  height: 44px !important;
-  background-color: rgba(0, 0, 0, 0.5) !important;
+  width: 40px !important;
+  height: 40px !important;
+  background-color: rgba(0, 0, 0, 0.4) !important;
   border-radius: 50% !important;
   cursor: pointer !important;
-  margin: 0 8px !important;
+  margin: 0 10px !important;
   transition: background-color 0.2s !important;
   z-index: 2147483647 !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
 }
 
 .tmd-viewer-btn:hover {
-  background-color: #FF3737 !important;
+  background-color: rgba(255, 55, 55, 0.8) !important;
 }
 
-.tmd-viewer-btn svg,
-.tmd-dl-btn svg {
-  fill: white !important;
-  width: 20px !important;
-  height: 20px !important;
+.tmd-viewer-btn img,
+.tmd-dl-btn img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
   pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6)) !important;
 }
 
 /* Progress UI */

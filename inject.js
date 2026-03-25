@@ -146,9 +146,10 @@
         btn.className = className;
         btn.title = title;
         if (iconUrl) {
-            btn.innerHTML = `<img src="${iconUrl}" style="width:22px;height:22px;object-fit:contain;filter:brightness(10);" draggable="false">`;
+            btn.innerHTML = `<img src="${iconUrl}" draggable="false">`;
         } else {
-            btn.innerHTML = '<svg viewBox="0 0 24 24" style="fill:white;width:20px;height:20px;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
+            // Generico en caso de fallo crítico
+            btn.innerHTML = '<svg viewBox="0 0 24 24" style="fill:#FF3737;width:24px;height:24px;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>';
         }
         return btn;
     }
@@ -156,57 +157,72 @@
     // ── INJECT ──
 
     function inject() {
-        // --- VIEWER BUTTON ---
+        // --- VIEWER BUTTON (Adentro del video abierto) ---
         const header = document.querySelector(".media-viewer-header, .media-viewer-buttons, .viewer-buttons");
         if (header && !header.querySelector(".tmd-viewer-btn")) {
             const viewerVideo = document.querySelector(".media-viewer-aspecter video, #MediaViewer video, .media-viewer-whole video, .ckin__player video");
             if (viewerVideo && (viewerVideo.src || viewerVideo.currentSrc)) {
-                // If user opened viewer by clicking thumbnail icon, auto-download
                 if (pendingDownload) {
-                    pendingDownload = false;
-                    if (!triggerDownloadFromVideo(viewerVideo)) {
-                        // Wait a bit more for the video to load
-                        setTimeout(() => {
-                            const v2 = document.querySelector(".media-viewer-aspecter video, #MediaViewer video, .ckin__player video");
-                            if (v2) triggerDownloadFromVideo(v2);
-                        }, 1500);
-                    }
+                    pendingDownload = false; // reset
+                    triggerDownloadFromVideo(viewerVideo);
                 }
-
                 const btn = buildMisilButton("tmd-viewer-btn", "Descargar con Misil");
                 btn.onclick = (e) => {
                     e.preventDefault(); e.stopPropagation();
                     const currentVid = document.querySelector(".media-viewer-aspecter video, #MediaViewer video, .media-viewer-whole video, .ckin__player video") || viewerVideo;
-                    if (!triggerDownloadFromVideo(currentVid)) {
-                        updateProgressUI(1, "No se pudo obtener la URL del video.");
-                        createProgressBar("error");
-                    }
+                    triggerDownloadFromVideo(currentVid);
                 };
                 header.insertBefore(btn, header.firstChild);
             }
         }
 
-        // --- THUMBNAIL BUTTONS (videos and photos) ---
+        // --- THUMBNAIL BUTTONS (Al lado derecho del chat bubble) ---
         const thumbs = document.querySelectorAll(".media-inner, .album-item-video, .media-video, .media-inner.interactive");
         thumbs.forEach(thumb => {
-            if (thumb.querySelector(".tmd-dl-btn")) return;
+            if (thumb.dataset.misilInjected) return;
+            
             const isVid = thumb.querySelector("video, .icon-play, .video-time");
             const isImg = thumb.querySelector("img.full-image, img.thumbnail");
             if (!isVid && !isImg) return;
-            if (getComputedStyle(thumb).position === "static") thumb.style.position = "relative";
+            
+            thumb.dataset.misilInjected = "true";
 
-            const btn = buildMisilButton("tmd-dl-btn", "Añadir a Misil");
+            // Encontrar contenedor seguro para que el absolute right:-32px funcione sin ser cortado
+            let targetParent = thumb.parentElement;
+            if (getComputedStyle(targetParent).position === "static") {
+                targetParent.style.position = "relative";
+            }
+            // Asegurar que no hay overflow hidden bloqueando el logo externo
+            if (getComputedStyle(targetParent).overflow === "hidden") {
+                targetParent.style.overflow = "visible";
+            }
+
+            const btn = buildMisilButton("tmd-dl-btn", "Descargar con Misil");
             btn.onclick = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                // Signal intent to content.js (which checks auth)
-                window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
-                    detail: { action: "user-icon-click", data: { isVideo: !!isVid } }
-                }));
-                // Set pending flag and open viewer (viewer will auto-download if authed)
-                pendingDownload = true;
-                thumb.click();
+                e.preventDefault(); e.stopPropagation(); // Evita que se abra el viewer
+                
+                // Extraer el link sin abrir
+                const mediaEl = thumb.querySelector("video, img.full-image, img.thumbnail");
+                const src = mediaEl ? (mediaEl.currentSrc || mediaEl.src) : null;
+                
+                if (src) {
+                    const filename = "telegram_media_" + Date.now() + (isVid ? ".mp4" : ".jpg");
+                    createProgressBar(filename);
+                    
+                    if (src.startsWith('blob:')) {
+                        // Blob local: usar motor interno base64 (fetch funciona en el scope local)
+                        fetchWithRelay(src, filename);
+                    } else {
+                        // URL externa: delegar a Background para evitar CORS Error (Failed to fetch)
+                        window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
+                            detail: { action: "request-direct-download", data: { src, filename } }
+                        }));
+                    }
+                } else {
+                    updateProgressUI(1, "No se encontró enlace multimedia");
+                }
             };
-            thumb.appendChild(btn);
+            targetParent.appendChild(btn);
         });
     }
 
