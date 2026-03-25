@@ -27,12 +27,15 @@ class SupabaseClient {
             body: JSON.stringify({ email, password })
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.msg || data.error_description || "Error de registro");
-        
-        // If email confirmation is disabled, user is immediately logged in
+        if (!response.ok) {
+            const msg = data.msg || data.message || data.error_description || data.error || JSON.stringify(data);
+            throw new Error(msg);
+        }
         if (data.session) {
             await this.setSession(data.session);
             await this.ensureProfile(data.user.id, email);
+        } else if (data.user && !data.session) {
+            throw new Error('Confirma tu correo antes de ingresar.');
         }
         return data;
     }
@@ -44,8 +47,10 @@ class SupabaseClient {
             body: JSON.stringify({ email, password })
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error_description || "Credenciales incorrectas");
-        
+        if (!response.ok) {
+            const msg = data.error_description || data.msg || data.message || data.error || 'Error de conexión';
+            throw new Error(msg);
+        }
         await this.setSession(data);
         await this.ensureProfile(data.user.id, email);
         return data;

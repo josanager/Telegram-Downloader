@@ -11,7 +11,8 @@
     "storage"
   ],
   "host_permissions": [
-    "*://web.telegram.org/*"
+    "*://web.telegram.org/*",
+    "*://cqgpbmxcavdvcvcoojyi.supabase.co/*"
   ],
   "side_panel": {
     "default_path": "sidepanel.html"
