@@ -126,6 +126,15 @@
         else if (type === 'download-error') updateProgressUI(1, "Error Motor: " + data.error);
     });
 
+    // Handle download requests from the side panel's "Detected Media" tab
+    window.addEventListener(`TelDownloadEvent_${extId}`, (e) => {
+        if (e.detail && e.detail.action === 'trigger-fetch') {
+            const { src, name } = e.detail.data;
+            createProgressBar(name);
+            fetchWithRelay(src, name);
+        }
+    }, true);
+
     function createViewerBtn(onClick) {
         const btn = document.createElement("div");
         btn.className = "tmd-viewer-btn";
@@ -164,5 +173,36 @@
         });
     }
 
-    setInterval(inject, 2000);
+    // --- MEDIA SCANNER (for Side Panel "Detected Media" tab) ---
+    const scannedSrcs = new Set();
+
+    function scanMedia() {
+        const videos = document.querySelectorAll('video');
+        videos.forEach(video => {
+            const src = video.currentSrc || video.src;
+            if (!src || scannedSrcs.has(src)) return;
+            if (src.startsWith('blob:') || src.length < 10) return;
+            scannedSrcs.add(src);
+
+            // Try to get a poster/thumbnail
+            const poster = video.poster || '';
+
+            // Generate a friendly name
+            const name = 'telegram_video_' + Date.now() + '.mp4';
+
+            window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
+                detail: {
+                    action: 'media-found',
+                    data: { src, poster, name, type: 'Video' }
+                }
+            }));
+        });
+    }
+
+    function injectAndScan() {
+        inject();
+        scanMedia();
+    }
+
+    setInterval(injectAndScan, 2000);
 })();

@@ -3,234 +3,421 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Misil - Telegram Downloader</title>
+    <title>Misil Downloader</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
         :root {
-            --bg-color: #0f172a;
-            --card-bg: rgba(30, 41, 59, 0.7);
+            --bg: #0c111b;
+            --surface: #161d2e;
+            --surface-hover: #1e2740;
+            --border: rgba(255,255,255,0.06);
             --primary: #FF3737;
-            --accent: #10b981;
-            --text: #f8fafc;
-            --text-muted: #94a3b8;
+            --primary-glow: rgba(255,55,55,0.25);
+            --green: #22c55e;
+            --text: #f1f5f9;
+            --text-muted: #64748b;
+            --radius: 14px;
         }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
             color: var(--text);
-            margin: 0;
-            padding: 20px;
+            padding: 16px;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            min-height: 100vh;
         }
 
-        .glass-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        }
+        .hidden { display: none !important; }
 
+        /* ── HEADER ── */
         .header {
             display: flex;
             align-items: center;
             gap: 12px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
         }
-
-        .logo-img {
-            width: 40px;
-            height: 40px;
-        }
-
-        .title {
-            font-size: 18px;
+        .header img { width: 38px; height: 38px; }
+        .header-info .title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+        .badge {
+            display: inline-block;
+            font-size: 9px;
             font-weight: 700;
-        }
-
-        .status-badge {
-            font-size: 10px;
-            padding: 2px 8px;
-            border-radius: 10px;
-            background: rgba(255, 55, 55, 0.2);
-            color: var(--primary);
+            padding: 2px 7px;
+            border-radius: 6px;
             text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .quota-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            gap: 15px;
-        }
-
-        .progress-circle {
-            position: relative;
-            width: 120px;
-            height: 120px;
-        }
-
-        .progress-circle svg {
-            transform: rotate(-90deg);
-        }
-
-        .progress-circle circle {
-            fill: none;
-            stroke-width: 8;
-            stroke-linecap: round;
-        }
-
-        .progress-bg {
-            stroke: rgba(255, 255, 255, 0.05);
-        }
-
-        .progress-fill {
-            stroke: var(--primary);
-            transition: stroke-dashoffset 0.5s ease;
-        }
-
-        .counter-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-
-        .count-val {
-            font-size: 24px;
-            font-weight: 700;
-            display: block;
-        }
-
-        .count-label {
-            font-size: 10px;
+            letter-spacing: 0.8px;
+            margin-top: 3px;
+            background: rgba(255,255,255,0.08);
             color: var(--text-muted);
         }
+        .badge.on { background: var(--primary-glow); color: var(--primary); }
 
-        /* History Section */
-        .history-title {
-            font-weight: 700;
+        /* ── AUTH VIEW ── */
+        #auth-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .auth-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px 22px;
+        }
+        .auth-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 10px;
+            padding: 3px;
+        }
+        .auth-tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.25s;
+        }
+        .auth-tab.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 12px var(--primary-glow);
+        }
+        .auth-desc {
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            margin-bottom: 22px;
+        }
+        .auth-desc strong { color: white; }
+        .field {
+            position: relative;
+            margin-bottom: 14px;
+        }
+        .field input {
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 13px 14px;
+            border-radius: 10px;
+            font-family: inherit;
             font-size: 14px;
-            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .field input:focus { outline: none; border-color: var(--primary); }
+        .field input::placeholder { color: var(--text-muted); }
+        .auth-error {
+            text-align: center;
+            font-size: 12px;
+            color: var(--primary);
+            min-height: 16px;
+            margin-bottom: 14px;
+            font-weight: 500;
+        }
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            background: var(--primary);
+            color: white;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .btn-primary:hover { box-shadow: 0 4px 20px var(--primary-glow); }
+        .btn-primary:active { transform: scale(0.97); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* ── DASHBOARD ── */
+        #dashboard-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        /* Quota */
+        .quota-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 20px;
+        }
+        .ring-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+        .ring-wrap svg { transform: rotate(-90deg); }
+        .ring-wrap circle { fill: none; stroke-linecap: round; }
+        .ring-bg { stroke: rgba(255,255,255,0.05); stroke-width: 7; }
+        .ring-fill { stroke: var(--primary); stroke-width: 7; transition: stroke-dashoffset 0.6s ease; }
+        .ring-label {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        .ring-val { font-size: 22px; font-weight: 800; display: block; line-height: 1; }
+        .ring-sub { font-size: 9px; color: var(--text-muted); font-weight: 500; }
+        .quota-text { flex: 1; }
+        .quota-text .qt-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+        .quota-text .qt-sub { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+        /* Tab Switcher */
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 3px;
+        }
+        .tab-btn {
+            flex: 1;
+            text-align: center;
+            padding: 9px 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.25s;
+        }
+        .tab-btn.active {
+            background: rgba(255,255,255,0.08);
+            color: white;
         }
 
-        .history-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            max-height: 300px;
+        /* Content Panels */
+        .tab-content {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px;
+            flex: 1;
             overflow-y: auto;
+            max-height: 400px;
         }
+        .tab-content::-webkit-scrollbar { width: 3px; }
+        .tab-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
 
-        .history-list::-webkit-scrollbar {
-            width: 4px;
+        .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
+        .section-title svg { width: 14px; height: 14px; fill: var(--text-muted); }
 
-        .history-list::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.1);
-            border-radius: 2px;
-        }
-
-        .history-item {
+        /* History Items */
+        .h-item {
             display: flex;
             align-items: center;
             gap: 10px;
             padding: 10px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            font-size: 12px;
+            border-bottom: 1px solid var(--border);
         }
-
-        .history-item:last-child {
-            border-bottom: none;
-        }
-
-        .history-icon {
-            width: 32px;
-            height: 32px;
+        .h-item:last-child { border-bottom: none; }
+        .h-icon {
+            width: 34px; height: 34px;
             border-radius: 8px;
-            background: rgba(255, 55, 55, 0.15);
+            background: rgba(255,55,55,0.08);
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
         }
-
-        .history-icon svg {
-            width: 16px;
-            height: 16px;
-            fill: var(--primary);
+        .h-icon svg { width: 16px; height: 16px; fill: var(--primary); }
+        .h-info { flex: 1; min-width: 0; }
+        .h-name {
+            font-size: 12px; font-weight: 500;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        .h-date { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
 
-        .history-info {
-            flex: 1;
-            min-width: 0;
+        /* Media Items */
+        .m-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
         }
-
-        .history-name {
-            color: var(--text);
-            font-weight: 500;
-            white-space: nowrap;
+        .m-item:last-child { border-bottom: none; }
+        .m-thumb {
+            width: 50px; height: 36px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.05);
             overflow: hidden;
-            text-overflow: ellipsis;
+            flex-shrink: 0;
+            position: relative;
         }
-
-        .history-date {
-            color: var(--text-muted);
-            font-size: 10px;
-            margin-top: 2px;
+        .m-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .m-thumb .play-badge {
+            position: absolute;
+            bottom: 2px; right: 2px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            font-size: 8px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 600;
         }
+        .m-info { flex: 1; min-width: 0; }
+        .m-name {
+            font-size: 12px; font-weight: 500;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .m-size { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+        .m-dl-btn {
+            width: 32px; height: 32px;
+            border-radius: 8px;
+            background: var(--primary);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .m-dl-btn:hover { box-shadow: 0 2px 10px var(--primary-glow); }
+        .m-dl-btn:active { transform: scale(0.9); }
+        .m-dl-btn svg { width: 16px; height: 16px; fill: white; }
 
-        .empty-state {
+        .empty {
             text-align: center;
             color: var(--text-muted);
-            font-size: 13px;
-            padding: 20px 0;
+            font-size: 12px;
+            padding: 30px 0;
+            line-height: 1.6;
         }
+
+        .logout-btn {
+            width: 100%;
+            padding: 10px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .logout-btn:hover { color: white; border-color: rgba(255,255,255,0.15); }
     </style>
 </head>
 <body>
+
+    <!-- HEADER (always visible) -->
     <div class="header">
-        <img src="icons/icon128.png" class="logo-img" alt="Logo">
-        <div>
-            <div class="title">Misil Downloader</div>
-            <span class="status-badge" id="plan-tag">Activa</span>
+        <img src="icons/logo.svg" alt="Misil">
+        <div class="header-info">
+            <div class="title">Misil</div>
+            <span class="badge" id="plan-tag">Desconectado</span>
         </div>
     </div>
 
-    <div class="glass-card quota-section">
-        <div class="progress-circle">
-            <svg width="120" height="120">
-                <circle class="progress-bg" cx="60" cy="60" r="54"></circle>
-                <circle class="progress-fill" cx="60" cy="60" r="54" stroke-dasharray="339.29" stroke-dashoffset="339.29" id="circle-fill"></circle>
-            </svg>
-            <div class="counter-text">
-                <span class="count-val" id="current-count">0</span>
-                <span class="count-label">/100 este mes</span>
+    <!-- AUTH VIEW -->
+    <div id="auth-view" class="hidden">
+        <div class="auth-card">
+            <div class="auth-tabs">
+                <div class="auth-tab active" id="tab-login">Entrar</div>
+                <div class="auth-tab" id="tab-register">Crear Cuenta</div>
+            </div>
+            <div class="auth-desc">
+                Activa tus <strong>100 descargas gratuitas</strong> al mes.
+            </div>
+            <div class="field">
+                <input type="text" id="auth-user" placeholder="Tu nombre de usuario">
+            </div>
+            <div class="field">
+                <input type="password" id="auth-pass" placeholder="Contraseña">
+            </div>
+            <div class="auth-error" id="auth-error"></div>
+            <button class="btn-primary" id="auth-submit-btn">Entrar</button>
+        </div>
+    </div>
+
+    <!-- DASHBOARD VIEW -->
+    <div id="dashboard-view" class="hidden">
+
+        <!-- Quota Card -->
+        <div class="quota-card">
+            <div class="ring-wrap">
+                <svg width="80" height="80">
+                    <circle class="ring-bg" cx="40" cy="40" r="34"></circle>
+                    <circle class="ring-fill" cx="40" cy="40" r="34"
+                            stroke-dasharray="213.6" stroke-dashoffset="213.6"
+                            id="circle-fill"></circle>
+                </svg>
+                <div class="ring-label">
+                    <span class="ring-val" id="current-count">0</span>
+                    <span class="ring-sub">de 100</span>
+                </div>
+            </div>
+            <div class="quota-text">
+                <div class="qt-title">Descargas</div>
+                <div class="qt-sub">Te quedan <strong id="remaining-count" style="color:white">100</strong> este mes</div>
             </div>
         </div>
-        <div style="font-size: 14px; color: var(--text-muted);">
-            Te quedan <span id="remaining-count" style="color:white; font-weight:bold">100</span> descargas.
+
+        <!-- Tab Bar -->
+        <div class="tab-bar" style="margin-top: 14px;">
+            <div class="tab-btn active" id="tab-media">🎬 Multimedia</div>
+            <div class="tab-btn" id="tab-history">📥 Historial</div>
         </div>
+
+        <!-- Media Tab -->
+        <div class="tab-content" id="panel-media" style="margin-top: 14px;">
+            <div class="section-title">
+                <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+                Multimedia Detectada
+            </div>
+            <div id="media-list">
+                <div class="empty" id="media-empty">Abre un chat con videos en Telegram y haz scroll para detectarlos automáticamente.</div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div class="tab-content hidden" id="panel-history" style="margin-top: 14px;">
+            <div class="section-title">
+                <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+                Historial de Descargas
+            </div>
+            <ul id="history-list" style="list-style:none;padding:0;margin:0;">
+                <li class="empty" id="empty-state">No has descargado nada aún</li>
+            </ul>
+        </div>
+
+        <button class="logout-btn" id="logout-btn" style="margin-top: 14px;">Cerrar Sesión</button>
     </div>
 
-    <div class="glass-card">
-        <div class="history-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
-            Historial de Descargas
-        </div>
-        <ul class="history-list" id="history-list">
-            <li class="empty-state" id="empty-state">Aún no hay descargas</li>
-        </ul>
-    </div>
-
+    <script src="supabase-client.js"></script>
     <script src="sidepanel.js"></script>
 </body>
 </html>

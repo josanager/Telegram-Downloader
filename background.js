@@ -60,6 +60,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true; // keep channel open for async sendResponse
   }
+
+  // Relay detected media from content script to side panel (no-op if panel closed)
+  if (message.type === 'media-detected') {
+    // Just let it propagate to side panel via runtime.onMessage
+    return;
+  }
+
+  // Side panel requests download of a specific detected video
+  if (message.type === 'trigger-download') {
+    queryAndRelay(message);
+    return;
+  }
 });
 
 async function queryAndRelay(message) {
@@ -67,12 +79,44 @@ async function queryAndRelay(message) {
   tabs.forEach(tab => chrome.tabs.sendMessage(tab.id, message).catch(() => {}));
 }
 
-// --- QUOTA (Local) ---
+// --- QUOTA (Supabase Synced) ---
 async function checkQuota() {
+  // Check auth state
+  const { sb_session } = await chrome.storage.local.get(['sb_session']);
+  if (!sb_session) {
+      // Prompt user to open side panel
+      queryAndRelay({ type: 'download-error', data: { error: '¡Requiere inicio de sesión! Abre la extensión.' } });
+      // We can also trigger side panel open directly in Chrome 116+
+      return false;
+  }
+
+  // Get current local quota (faster UX than blocking fetch)
   const { download_count = 0 } = await chrome.storage.local.get(['download_count']);
-  if (download_count >= 100) return false;
+  
+  // Hard limit check
+  if (download_count >= 100) {
+      queryAndRelay({ type: 'download-error', data: { error: 'Límite (100) alcanzado. Pásate a Premium.' } });
+      return false;
+  }
+  
+  // Optimistic UI Update
   await chrome.storage.local.set({ download_count: download_count + 1 });
   chrome.runtime.sendMessage({ type: 'quota-update', count: download_count + 1, limit: 100 }).catch(() => {});
+  
+  // Background Sync via fetch (simulate what supabase-client does since we can't import modules easily in MV3 root)
+  const SUPABASE_URL = "https://cqgpbmxcavdvcvcoojyi.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxZ3BibXhjYXZkdmN2Y29vanlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0ODM5NjYsImV4cCI6MjA4OTA1OTk2Nn0.yLz5CnPJW8w7aOarAYDPyB_dYInyB9gKNpBwLpWOoqg";
+  
+  fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${sb_session.user.id}`, {
+      method: 'PATCH',
+      headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${sb_session.access_token}`,
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ download_count: download_count + 1 })
+  }).catch(e => console.error("Sync error:", e));
+
   return true;
 }
 
