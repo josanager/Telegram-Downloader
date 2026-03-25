@@ -98,6 +98,10 @@
         } catch (err) {
             console.error("[Misil] Error:", err);
             updateProgressUI(1, "Error: " + err.message);
+            setTimeout(() => {
+                const el = document.getElementById("tmd-progress-container");
+                if (el) el.remove();
+            }, 8000);
             window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                 detail: { action: "relay-error", data: { downloadId, error: err.message } }
             }));
@@ -249,8 +253,15 @@
 
     window.addEventListener(`TelExtensionProgress_${extId}`, (e) => {
         const { type, data } = e.detail;
-        if (type === 'download-progress') updateProgressUI(data.percent, data.status, data.mb);
-        else if (type === 'download-error') updateProgressUI(1, "⛔ " + data.error);
+        if (type === 'download-progress') {
+            updateProgressUI(data.percent, data.status, data.mb);
+        } else if (type === 'download-error') {
+            updateProgressUI(1, "⛔ " + data.error);
+            setTimeout(() => {
+                const el = document.getElementById("tmd-progress-container");
+                if (el) el.remove();
+            }, 8000);
+        }
     });
 
     setInterval(inject, 2000);
