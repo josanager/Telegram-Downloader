@@ -9,14 +9,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     else showAuth();
 
     setupAuthListeners();
-    setupTabSwitcher();
-
-    const { download_history = [] } = await chrome.storage.local.get(['download_history']);
-    renderHistory(download_history);
 
     chrome.runtime.onMessage.addListener((message) => {
         if (message.type === 'quota-update')        updateQuota(message.count);
-        if (message.type === 'history-updated')     renderHistory(message.history);
         if (message.type === 'media-added')         addMediaToPanel(message.data);
 
         // Per-item download progress events
@@ -94,23 +89,6 @@ function setupAuthListeners() {
     };
 }
 
-// ── TABS ──
-function setupTabSwitcher() {
-    const tabMedia   = document.getElementById('tab-media');
-    const tabHistory = document.getElementById('tab-history');
-    const panelMedia = document.getElementById('panel-media');
-    const panelHist  = document.getElementById('panel-history');
-
-    tabMedia.onclick = () => {
-        tabMedia.classList.add('active');   tabHistory.classList.remove('active');
-        panelMedia.classList.remove('hidden'); panelHist.classList.add('hidden');
-    };
-    tabHistory.onclick = () => {
-        tabHistory.classList.add('active'); tabMedia.classList.remove('active');
-        panelHist.classList.remove('hidden'); panelMedia.classList.add('hidden');
-    };
-}
-
 // ── QUOTA ──
 function updateQuota(count) {
     const limit = 100;
@@ -130,9 +108,6 @@ function addMediaToPanel(data) {
     const list  = document.getElementById('media-list');
     const empty = document.getElementById('media-empty');
     if (empty) empty.style.display = 'none';
-
-    // Switch to multimedia tab
-    document.getElementById('tab-media').click();
 
     const item = document.createElement('div');
     item.id = 'mitem-' + data.thumbId;
@@ -219,9 +194,6 @@ function setItemDone(thumbId, filename) {
     if (bar)    { bar.style.width = '100%'; bar.style.background = '#22c55e'; }
     if (status) { status.textContent = '✅ ¡Descargado!'; status.style.color = '#22c55e'; }
     if (dlBtn)  { dlBtn.style.display = 'none'; }
-
-    // Move to history after 3s
-    setTimeout(() => el.remove(), 3000);
 }
 
 function setItemError(thumbId, error) {
@@ -234,36 +206,62 @@ function setItemError(thumbId, error) {
     if (dlBtn)  { dlBtn.style.display = 'flex'; dlBtn.disabled = false; }
 }
 
-// ── HISTORY ──
-function renderHistory(history) {
-    const list  = document.getElementById('history-list');
-    const empty = document.getElementById('empty-state');
-    list.querySelectorAll('.h-item').forEach(el => el.remove());
-
-    if (!history || history.length === 0) {
-        empty.style.display = 'block'; return;
-    }
-    empty.style.display = 'none';
-
-    history.forEach(item => {
-        const li  = document.createElement('li');
-        li.className = 'h-item';
-        li.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);';
-        const isVideo = /\.(mp4|webm|mkv)$/i.test(item.name);
-        li.innerHTML = `
-            <div style="width:34px;height:34px;border-radius:8px;background:rgba(255,55,55,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">
-                ${isVideo ? '🎬' : '🖼️'}
-            </div>
-            <div style="flex:1;min-width:0;">
-                <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${item.name}">${item.name}</div>
-                <div style="font-size:10px;color:#64748b;margin-top:2px;">${item.date}</div>
-            </div>
-        `;
-        list.appendChild(li);
-    });
-}
-
 // Spin animation for loading states
 const style = document.createElement('style');
 style.textContent = '@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
 document.head.appendChild(style);
+
+// ── PARTICLES VIVO EFECT ──
+function initParticles() {
+    const canvas = document.getElementById("particles-bg");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    
+    let width, height;
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    const particles = [];
+    const config = {
+        count: 50,
+        speed: 0.3,
+        color: 'rgba(255, 55, 55, '
+    };
+
+    for (let i = 0; i < config.count; i++) {
+        particles.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            r: Math.random() * 2.5 + 0.5,
+            dx: (Math.random() - 0.5) * config.speed,
+            dy: (Math.random() - 0.5) * config.speed,
+            alpha: Math.random() * 0.4 + 0.1
+        });
+    }
+
+    function animate() {
+        ctx.clearRect(0, 0, width, height);
+        particles.forEach(p => {
+            p.x += p.dx;
+            p.y += p.dy;
+            
+            // Seamless wrap around
+            if (p.x < 0) p.x = width;
+            if (p.x > width) p.x = 0;
+            if (p.y < 0) p.y = height;
+            if (p.y > height) p.y = 0;
+            
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = config.color + p.alpha + ')';
+            ctx.fill();
+        });
+        requestAnimationFrame(animate);
+    }
+    animate();
+}
+initParticles();
