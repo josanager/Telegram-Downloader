@@ -29,6 +29,11 @@ window.addEventListener(`TelDownloadEvent_${extId}`, async (e) => {
     return;
   }
 
+  if (action === 'request-direct-download') {
+    chrome.runtime.sendMessage({ action: 'request-direct-download', data }).catch(() => {});
+    return;
+  }
+
   // All relay and panel-download events
   if (action && (action.startsWith('relay-') || action.startsWith('panel-download'))) {
     chrome.runtime.sendMessage({ action: action.startsWith('relay-') ? action : undefined, type: action.startsWith('panel-') ? action : undefined, data }).catch(() => {});
