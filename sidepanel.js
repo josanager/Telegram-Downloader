@@ -88,7 +88,8 @@ function updateQuota(count) {
     if (el) el.textContent = count;
     if (rem) rem.textContent = Math.max(0, limit - count);
     if (ring) {
-        const r = 34, circ = 2 * Math.PI * r;
+        const r = 44, circ = 2 * Math.PI * r;
+        ring.style.strokeDasharray = circ;
         ring.style.strokeDashoffset = circ - (count / limit) * circ;
     }
 }

@@ -47,17 +47,17 @@
         .header-info .title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
         .badge {
             display: inline-block;
-            font-size: 9px;
-            font-weight: 700;
-            padding: 2px 7px;
-            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 5px 12px;
+            border-radius: 8px;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
+            letter-spacing: 1px;
             margin-top: 3px;
-            background: rgba(255,255,255,0.08);
+            background: #1e2740;
             color: var(--text-muted);
         }
-        .badge.on { background: var(--primary-glow); color: var(--primary); }
+        .badge.on { background: var(--primary); color: white; box-shadow: 0 0 15px var(--primary-glow); }
 
         /* ── AUTH VIEW ── */
         #auth-view {
@@ -159,26 +159,29 @@
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 24px;
+            padding: 32px 24px;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 20px;
+            justify-content: center;
+            gap: 24px;
+            text-align: center;
         }
-        .ring-wrap { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
-        .ring-wrap svg { transform: rotate(-90deg); }
+        .ring-wrap { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
+        .ring-wrap svg { transform: rotate(-90deg); width: 100%; height: 100%; }
         .ring-wrap circle { fill: none; stroke-linecap: round; }
-        .ring-bg { stroke: rgba(255,255,255,0.05); stroke-width: 7; }
-        .ring-fill { stroke: var(--primary); stroke-width: 7; transition: stroke-dashoffset 0.6s ease; }
+        .ring-bg { stroke: #1e2740; stroke-width: 8; }
+        .ring-fill { stroke: var(--primary); stroke-width: 8; transition: stroke-dashoffset 0.6s ease; }
         .ring-label {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
         }
-        .ring-val { font-size: 22px; font-weight: 800; display: block; line-height: 1; }
-        .ring-sub { font-size: 9px; color: var(--text-muted); font-weight: 500; }
-        .quota-text { flex: 1; }
-        .quota-text .qt-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-        .quota-text .qt-sub { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+        .ring-val { font-size: 42px; font-weight: 900; display: block; line-height: 1; color: white; }
+        .ring-sub { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 4px; display: block; }
+        .quota-text { width: 100%; }
+        .quota-text .qt-title { font-size: 18px; font-weight: 800; margin-bottom: 6px; color: white; }
+        .quota-text .qt-sub { font-size: 14px; color: var(--text-muted); line-height: 1.4; }
 
         /* Tab Switcher */
         .tab-bar {
@@ -365,10 +368,10 @@
         <!-- Quota Card -->
         <div class="quota-card">
             <div class="ring-wrap">
-                <svg width="80" height="80">
-                    <circle class="ring-bg" cx="40" cy="40" r="34"></circle>
-                    <circle class="ring-fill" cx="40" cy="40" r="34"
-                            stroke-dasharray="213.6" stroke-dashoffset="213.6"
+                <svg viewBox="0 0 100 100">
+                    <circle class="ring-bg" cx="50" cy="50" r="44"></circle>
+                    <circle class="ring-fill" cx="50" cy="50" r="44"
+                            stroke-dasharray="276.46" stroke-dashoffset="276.46"
                             id="circle-fill"></circle>
                 </svg>
                 <div class="ring-label">
@@ -377,28 +380,26 @@
                 </div>
             </div>
             <div class="quota-text">
-                <div class="qt-title">Descargas</div>
-                <div class="qt-sub">Te quedan <strong id="remaining-count" style="color:white">100</strong> este mes</div>
+                <div class="qt-title">Tus Descargas</div>
+                <div class="qt-sub">Te quedan <strong id="remaining-count" style="color:var(--primary)">100</strong> descargas este mes</div>
             </div>
         </div>
 
-
-        <!-- Media Tab -->
-        <div class="tab-content" id="panel-media" style="margin-top: 14px;">
-            <div class="section-title">
-                <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
-                Descargas
+        <!-- Info/Instructions -->
+        <div class="tab-content" style="margin-top: 14px; text-align: center; border: none; background: transparent;">
+            <div style="margin-bottom: 20px;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="var(--primary)" style="opacity: 0.8;">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                </svg>
             </div>
-            <div id="media-list">
-                <div class="empty" id="media-empty">
-                    <div style="font-size:28px;margin-bottom:12px;">🎬</div>
-                    Haz clic en el ícono rojo de Misil<br>que aparece en cualquier foto o video<br>de Telegram para descargarlo.
-                </div>
+            <div class="empty">
+                Usa el icono de Misil en Telegram<br>
+                para descargar archivos multimedia.<br>
+                Las descargas se guardan en tu carpeta local.
             </div>
         </div>
 
-
-        <button class="logout-btn" id="logout-btn" style="margin-top: 14px;">Cerrar Sesión</button>
+        <button class="logout-btn" id="logout-btn" style="margin-top: auto;">Cerrar Sesión</button>
     </div>
 
     <script src="supabase-client.js"></script>
