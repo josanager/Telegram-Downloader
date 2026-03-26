@@ -1,7 +1,6 @@
-// sidepanel.js – Misil v2.2
+// sidepanel.js – Misil v2.2.2
 
 let isLoginMode = true;
-const addedThumbs = new Set();
 
 document.addEventListener('DOMContentLoaded', async () => {
     const session = await SupabaseClient.getSession();
@@ -18,10 +17,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (message.type === 'panel-download-start')    setItemStatus(message.data.thumbId, 'Iniciando...', 0);
         if (message.type === 'panel-download-size')     setItemSize(message.data.thumbId, message.data.totalMb);
         if (message.type === 'panel-download-progress') setItemStatus(message.data.thumbId, `${message.data.receivedMb} MB`, message.data.percent);
-        if (message.type === 'panel-download-done')     setItemDone(message.data.thumbId, message.data.filename);
+        if (message.type === 'panel-download-done') {
+            setItemDone(message.data.thumbId, message.data.filename);
+            // Refresh quota from Supabase after each successful download
+            refreshQuotaFromSupabase();
+        }
         if (message.type === 'panel-download-error')    setItemError(message.data.thumbId, message.data.error);
     });
 });
+
+async function refreshQuotaFromSupabase() {
+    try {
+        const profile = await SupabaseClient.getProfile();
+        if (profile) updateQuota(profile.download_count);
+    } catch {}
+}
 
 // ── AUTH ──
 function showAuth() {
@@ -102,8 +112,6 @@ function updateQuota(count) {
 // ── MEDIA PANEL ──
 
 function addMediaToPanel(data) {
-    if (addedThumbs.has(data.thumbId)) return;
-    addedThumbs.add(data.thumbId);
 
     const list  = document.getElementById('media-list');
     const empty = document.getElementById('media-empty');

@@ -1,19 +1,14 @@
-// inject.js – Misil v2.2 (miniatura.svg, in-corner button, auto-viewer capture, side-panel download)
+// inject.js – Misil v2.2.2 (Repeatable downloads, viewer auto-capture, side-panel progress)
 
 (function () {
     const currentScript = document.currentScript;
     const extId = currentScript && currentScript.dataset.extId ? currentScript.dataset.extId : 'default';
     const iconUrl = currentScript && currentScript.dataset.iconUrl ? currentScript.dataset.iconUrl : '';
-    console.log(`[Misil] v2.2 Loaded (${extId})`);
+    console.log(`[Misil] v2.2.2 Loaded (${extId})`);
 
-    // ── SIDE PANEL DOWNLOAD RELAY ──
-    // Sends download requests + progress through the bg script → sidepanel.js
-    // We no longer show a floating overlay. Everything shows in the side panel.
-
-    let pendingCapture = null; // { thumbId, name, type }
+    // ── RELAY DOWNLOAD (page-context fetch, has Telegram cookies) ──
 
     async function fetchAndRelayToPanel(url, filename, thumbId) {
-        // Notify panel: "downloading started"
         window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
             detail: { action: 'panel-download-start', data: { thumbId, filename } }
         }));
@@ -38,7 +33,6 @@
                     if (cr) { const m = cr.match(/\/(\d+)$/); if (m) total = parseInt(m[1]); }
                     else total = parseInt(response.headers.get('Content-Length')) || 0;
 
-                    // Tell panel the total size
                     if (total) {
                         window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                             detail: { action: 'panel-download-size', data: { thumbId, totalMb: (total / 1048576).toFixed(1) } }
@@ -86,17 +80,20 @@
     }
 
     // ── VIEWER AUTO-CAPTURE ──
-    // When a pending capture is set, we watch for the viewer to open, grab the URL,
-    // close the viewer, and start the download.
+    // When pendingCaptures has entries, we watch for the viewer to open, grab the URL,
+    // close the viewer, and start the download relay.
 
+    let pendingCaptures = []; // Array of { thumbId, filename }
     let viewerWatchInterval = null;
 
-    function startViewerWatch(thumbId, filename, type) {
-        if (viewerWatchInterval) clearInterval(viewerWatchInterval);
-        let attempts = 0;
+    function startViewerWatch(thumbId, filename) {
+        pendingCaptures.push({ thumbId, filename });
+        if (viewerWatchInterval) return; // Already watching
 
+        let attempts = 0;
         viewerWatchInterval = setInterval(() => {
             attempts++;
+
             const vid = document.querySelector(
                 ".media-viewer-aspecter video, #MediaViewer video, .media-viewer-whole video, .ckin__player video"
             );
@@ -108,28 +105,35 @@
                     clearInterval(viewerWatchInterval);
                     viewerWatchInterval = null;
 
-                    // Close the viewer
-                    const closeBtn = document.querySelector(".media-viewer-close, .btn-icon.tgico-close, [class*='close']");
-                    if (closeBtn) closeBtn.click();
-                    else {
-                        // Fallback: press Escape
-                        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-                    }
+                    // Get all pending captures
+                    const captures = [...pendingCaptures];
+                    pendingCaptures = [];
 
-                    // Start download after brief delay (let viewer close animation run)
+                    // Close the viewer
+                    const closeBtn = document.querySelector(".media-viewer-close, .btn-icon.tgico-close");
+                    if (closeBtn) closeBtn.click();
+                    else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+
+                    // Start download for ALL pending captures (same URL)
                     setTimeout(() => {
-                        fetchAndRelayToPanel(src, filename, thumbId);
+                        captures.forEach(cap => {
+                            fetchAndRelayToPanel(src, cap.filename, cap.thumbId);
+                        });
                     }, 400);
                     return;
                 }
             }
 
-            if (attempts > 20) { // 4 seconds timeout
+            if (attempts > 25) { // 5 seconds timeout
                 clearInterval(viewerWatchInterval);
                 viewerWatchInterval = null;
-                window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
-                    detail: { action: 'panel-download-error', data: { thumbId, error: 'No se pudo capturar el video' } }
-                }));
+                const captures = [...pendingCaptures];
+                pendingCaptures = [];
+                captures.forEach(cap => {
+                    window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
+                        detail: { action: 'panel-download-error', data: { thumbId: cap.thumbId, error: 'No se pudo capturar el video' } }
+                    }));
+                });
             }
         }, 200);
     }
@@ -137,7 +141,7 @@
     // ── INJECT ──
 
     function inject() {
-        // --- MEDIA IN CHAT: Add miniatura.svg button inside each bubble corner ---
+        // --- MEDIA IN CHAT: Add miniatura.svg button inside each media ---
         const mediaElements = document.querySelectorAll(
             ".media-inner, .album-item-video, .media-video, .media-inner.interactive"
         );
@@ -151,27 +155,22 @@
 
             media.dataset.misilDone = "true";
 
-            // Make sure the parent can contain absolute children
             if (getComputedStyle(media).position === 'static') {
                 media.style.position = 'relative';
             }
 
             const type = isVid ? 'Video' : 'Foto';
             const ext = isVid ? '.mp4' : '.jpg';
-            const thumbId = 'tm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-            const filename = 'telegram_' + (isVid ? 'video' : 'foto') + '_' + Date.now() + ext;
 
             // Get thumbnail for the panel
             const thumbImgEl = media.querySelector('img');
             const posterEl = media.querySelector('video');
             const thumbnail = thumbImgEl ? thumbImgEl.src : (posterEl && posterEl.poster ? posterEl.poster : '');
 
-            // Build button
+            // Build button (REUSABLE – no "already added" lock)
             const btn = document.createElement('div');
             btn.className = 'tmd-dl-btn';
-            btn.dataset.thumbId = thumbId;
 
-            // Large invisible hit area + visible icon layered on top
             btn.innerHTML = `
                 <div class="tmd-dl-hitarea"></div>
                 <img class="tmd-dl-icon" src="${iconUrl}" draggable="false" alt="Misil">
@@ -182,11 +181,11 @@
                 e.stopPropagation();
                 e.stopImmediatePropagation();
 
-                if (btn.dataset.added === 'true') return;
-                btn.dataset.added = 'true';
-                btn.classList.add('tmd-dl-btn--added');
+                // Each click = a new download. Generate unique thumbId every time.
+                const thumbId = 'tm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                const filename = 'telegram_' + (isVid ? 'video' : 'foto') + '_' + Date.now() + ext;
 
-                // 1. Send media to side panel (shows loading state immediately)
+                // 1. Add to side panel (shows the item immediately)
                 window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                     detail: {
                         action: 'add-to-panel',
@@ -196,41 +195,18 @@
 
                 // 2. Click the media to open the viewer
                 setTimeout(() => {
-                    // Find the actual clickable element (not the btn itself)
                     const clickTarget = media.querySelector('img, video, .media-photo, .full-image') || media;
                     clickTarget.click();
-                    // Start watching for the viewer to open
-                    startViewerWatch(thumbId, filename, type);
+                    startViewerWatch(thumbId, filename);
                 }, 150);
+
+                // Visual pulse feedback
+                btn.classList.add('tmd-dl-btn--pulse');
+                setTimeout(() => btn.classList.remove('tmd-dl-btn--pulse'), 600);
             };
 
             media.appendChild(btn);
         });
-
-        // --- VIEWER: Optionally add a manual Misil button in the viewer header ---
-        const viewerHeader = document.querySelector(".media-viewer-header, .media-viewer-buttons, .viewer-buttons");
-        if (viewerHeader && !viewerHeader.querySelector('.tmd-viewer-btn')) {
-            const vid = document.querySelector(".media-viewer-aspecter video, #MediaViewer video, .ckin__player video");
-            if (vid && (vid.currentSrc || vid.src)) {
-                const vBtn = document.createElement('div');
-                vBtn.className = 'tmd-viewer-btn';
-                vBtn.title = 'Descargar con Misil';
-                vBtn.innerHTML = `<img src="${iconUrl}" style="width:26px;height:26px;border-radius:4px;">`;
-                vBtn.onclick = (e) => {
-                    e.preventDefault(); e.stopPropagation();
-                    const src = vid.currentSrc || vid.src;
-                    if (!src || src.startsWith('blob:')) return;
-                    const fn = 'telegram_video_' + Date.now() + '.mp4';
-                    const tid = 'viewer_' + Date.now();
-                    fetchAndRelayToPanel(src, fn, tid);
-                    // Also add to panel
-                    window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
-                        detail: { action: 'add-to-panel', data: { name: fn, type: 'Video', thumbnail: '', thumbId: tid } }
-                    }));
-                };
-                viewerHeader.insertBefore(vBtn, viewerHeader.firstChild);
-            }
-        }
     }
 
     setInterval(inject, 2000);

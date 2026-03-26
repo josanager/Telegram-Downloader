@@ -53,6 +53,16 @@
   opacity: 0.5 !important;
 }
 
+/* Pulse feedback on click */
+.tmd-dl-btn--pulse .tmd-dl-icon {
+  animation: misil-pulse 0.5s ease !important;
+}
+@keyframes misil-pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(0.7); opacity: 0.6; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 /* ── Button in the Media Viewer header ── */
 .tmd-viewer-btn {
   display: flex !important;

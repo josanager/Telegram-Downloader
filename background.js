@@ -1,4 +1,7 @@
-// background.js – Misil v2.0 (Relay Orchestrator)
+// background.js – Misil v2.2.2 (Reliable Quota + Relay)
+
+const SUPABASE_URL = "https://cqgpbmxcavdvcvcoojyi.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxZ3BibXhjYXZkdmN2Y29vanlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0ODM5NjYsImV4cCI6MjA4OTA1OTk2Nn0.yLz5CnPJW8w7aOarAYDPyB_dYInyB9gKNpBwLpWOoqg";
 
 async function setupOffscreen() {
   const contexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] });
@@ -10,11 +13,11 @@ async function setupOffscreen() {
   });
 }
 
-// Open side panel when user clicks the extension icon
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Allow inject.js (via content.js) to open the side panel
+
+  // Open side panel
   if (message.action === 'open-sidepanel') {
     if (sender.tab && sender.tab.id) {
       chrome.sidePanel.open({ tabId: sender.tab.id }).catch(() => {});
@@ -22,6 +25,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
+  // Relay chunks to offscreen
   if (message.action && message.action.startsWith('relay-')) {
     if (message.action === 'relay-start') {
       checkQuota(sender.tab ? sender.tab.id : null).then((canDownload) => {
@@ -37,14 +41,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
-  // Forward per-item download progress events to the side panel
+  // Forward per-item download progress to side panel
   const PANEL_EVENTS = ['panel-download-start', 'panel-download-size', 'panel-download-progress', 'panel-download-done', 'panel-download-error'];
   if (PANEL_EVENTS.includes(message.type)) {
     chrome.runtime.sendMessage({ type: message.type, data: message.data }).catch(() => {});
     return;
   }
 
-  // Download complete from offscreen
+  // Download complete from offscreen → save file via chrome.downloads
   if (message.type === 'download-complete') {
     chrome.downloads.download({
       url: message.data.blobUrl,
@@ -54,36 +58,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }, (id) => {
       if (chrome.runtime.lastError) {
         queryAndRelay({ type: 'download-error', data: { error: chrome.runtime.lastError.message } });
-      } else {
-        queryAndRelay({ type: 'download-progress', data: { percent: 100, status: '¡Listo!' } });
-        saveToHistory(message.data.filename);
       }
     });
   }
 
-  // Relay progress/error back to page
+  // Relay progress/error to page
   if (message.type === 'download-progress' || message.type === 'download-error') {
     queryAndRelay(message);
   }
 
-  // Side panel requests history
-  if (message.type === 'get-history') {
-    chrome.storage.local.get(['download_history'], (result) => {
-      sendResponse(result.download_history || []);
-    });
-    return true; // keep channel open for async sendResponse
-  }
-
-  // Relay detected media from content script to side panel (no-op if panel closed)
-  if (message.type === 'media-detected') {
-    // Just let it propagate to side panel via runtime.onMessage
-    return;
-  }
-
-  // Side panel requests download of a specific detected video
-  if (message.type === 'trigger-download') {
-    queryAndRelay(message);
-    return;
+  // Get real-time count from Supabase
+  if (message.type === 'get-quota') {
+    getQuotaFromSupabase().then(count => {
+      sendResponse({ count });
+    }).catch(() => sendResponse({ count: 0 }));
+    return true;
   }
 });
 
@@ -92,51 +81,59 @@ async function queryAndRelay(message) {
   tabs.forEach(tab => chrome.tabs.sendMessage(tab.id, message).catch(() => {}));
 }
 
-// --- QUOTA (Supabase Synced) ---
+// --- QUOTA: Always reads from Supabase (source of truth) ---
+async function getQuotaFromSupabase() {
+  const { sb_session } = await chrome.storage.local.get(['sb_session']);
+  if (!sb_session) return 0;
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${sb_session.user.id}&select=download_count`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${sb_session.access_token}`
+      }
+    });
+    if (!res.ok) return 0;
+    const data = await res.json();
+    const count = data.length > 0 ? (data[0].download_count || 0) : 0;
+    // Keep local cache in sync
+    await chrome.storage.local.set({ download_count: count });
+    return count;
+  } catch {
+    // Fallback to local cache
+    const { download_count = 0 } = await chrome.storage.local.get(['download_count']);
+    return download_count;
+  }
+}
+
 async function checkQuota(tabId) {
   const { sb_session } = await chrome.storage.local.get(['sb_session']);
   if (!sb_session) {
-      // Open the side panel so the user can log in
-      if (tabId) chrome.sidePanel.open({ tabId }).catch(() => {});
-      return false;
+    if (tabId) chrome.sidePanel.open({ tabId }).catch(() => {});
+    return false;
   }
 
-  const { download_count = 0 } = await chrome.storage.local.get(['download_count']);
-  if (download_count >= 100) {
-      queryAndRelay({ type: 'download-error', data: { error: 'Límite (100) alcanzado. Pásate a Premium.' } });
-      return false;
+  const count = await getQuotaFromSupabase();
+  if (count >= 100) {
+    queryAndRelay({ type: 'download-error', data: { error: 'Límite (100) alcanzado. Pásate a Premium.' } });
+    return false;
   }
 
-  await chrome.storage.local.set({ download_count: download_count + 1 });
-  chrome.runtime.sendMessage({ type: 'quota-update', count: download_count + 1, limit: 100 }).catch(() => {});
-
-  // Background sync with Supabase
-  const SUPABASE_URL = "https://cqgpbmxcavdvcvcoojyi.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxZ3BibXhjYXZkdmN2Y29vanlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0ODM5NjYsImV4cCI6MjA4OTA1OTk2Nn0.yLz5CnPJW8w7aOarAYDPyB_dYInyB9gKNpBwLpWOoqg";
-
-  fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${sb_session.user.id}`, {
+  // Increment in Supabase
+  const newCount = count + 1;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${sb_session.user.id}`, {
       method: 'PATCH',
       headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${sb_session.access_token}`,
-          'Content-Type': 'application/json'
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${sb_session.access_token}`,
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ download_count: download_count + 1 })
-  }).catch(e => console.error("Sync error:", e));
+      body: JSON.stringify({ download_count: newCount })
+    });
+  } catch (e) { console.error("Sync error:", e); }
 
+  await chrome.storage.local.set({ download_count: newCount });
+  chrome.runtime.sendMessage({ type: 'quota-update', count: newCount }).catch(() => {});
   return true;
-}
-
-// --- DOWNLOAD HISTORY ---
-async function saveToHistory(filename) {
-  const { download_history = [] } = await chrome.storage.local.get(['download_history']);
-  download_history.unshift({
-    name: filename,
-    date: new Date().toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-  });
-  // Keep last 50 entries
-  if (download_history.length > 50) download_history.length = 50;
-  await chrome.storage.local.set({ download_history });
-  // Notify side panel
-  chrome.runtime.sendMessage({ type: 'history-updated', history: download_history }).catch(() => {});
 }
