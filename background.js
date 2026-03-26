@@ -37,6 +37,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
+  // Forward per-item download progress events to the side panel
+  const PANEL_EVENTS = ['panel-download-start', 'panel-download-size', 'panel-download-progress', 'panel-download-done', 'panel-download-error'];
+  if (PANEL_EVENTS.includes(message.type)) {
+    chrome.runtime.sendMessage({ type: message.type, data: message.data }).catch(() => {});
+    return;
+  }
+
   // Download complete from offscreen
   if (message.type === 'download-complete') {
     chrome.downloads.download({

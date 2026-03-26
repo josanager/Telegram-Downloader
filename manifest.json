@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Misil - Telegram Downloader",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "High-speed media downloader for Telegram Web. Save protected videos and images directly to your Downloads folder.",
   "permissions": [
     "activeTab",
@@ -22,7 +22,8 @@
       "resources": [
         "inject.js",
         "styles.css",
-        "icons/logo.svg"
+        "icons/logo.svg",
+        "icons/miniatura.svg"
       ],
       "matches": [
         "*://web.telegram.org/*"
