@@ -452,22 +452,30 @@
 
     function scan() {
         document.querySelectorAll(SEL).forEach(m => {
-            if (m.dataset.misil) return;
+            // Virtual Scrolling Fix: Check for physical button existence instead of dataset marking.
+            // React recycles .media-inner containers, so dataset markers will wrongfully persist.
+            if (m.querySelector('.tmd-dl-btn')) return;
+
             const isV = !!m.querySelector(VID_SIG);
             const isI = !isV && !!m.querySelector('img');
             if (!isV && !isI) return;
-            m.dataset.misil = '1';
+            
             if (getComputedStyle(m).position === 'static') m.style.position = 'relative';
 
             const btn = document.createElement('div');
             btn.className = 'tmd-dl-btn';
             btn.innerHTML = '<div class="tmd-dl-hitarea"></div><img class="tmd-dl-icon" src="' + ICON + '" draggable="false" alt="Misil">';
+            
             btn.addEventListener('click', e => {
                 e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
                 btn.classList.add('tmd-dl-btn--pulse');
                 setTimeout(() => btn.classList.remove('tmd-dl-btn--pulse'), 600);
-                handleClick(m, isV);
+                
+                // Recalculate isV on click, just in case React recycled the container without dropping the button
+                const currentIsV = !!m.querySelector(VID_SIG);
+                handleClick(m, currentIsV);
             }, true);
+            
             m.appendChild(btn);
         });
     }
@@ -491,7 +499,6 @@
             observer = null;
         }
         document.querySelectorAll('.tmd-dl-btn').forEach(b => b.remove());
-        document.querySelectorAll('[data-misil]').forEach(m => delete m.dataset.misil);
     }
 
     window.addEventListener('message', (e) => {
