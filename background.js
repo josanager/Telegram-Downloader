@@ -1,4 +1,4 @@
-// background.js — Misil v4.0 (Orchestrator: quota + auth only, ZERO binary data)
+// background.js — Misil v4.1 (Orchestrator: quota + auth only, ZERO binary data)
 
 const SB_URL = 'https://cqgpbmxcavdvcvcoojyi.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxZ3BibXhjYXZkdmN2Y29vanlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0ODM5NjYsImV4cCI6MjA4OTA1OTk2Nn0.yLz5CnPJW8w7aOarAYDPyB_dYInyB9gKNpBwLpWOoqg';
@@ -49,8 +49,14 @@ async function consumeCredit() {
         });
         if (r.ok) {
             const result = await r.json();
-            await chrome.storage.local.set({ download_count: result.count || 0 });
-            return result; // {allowed, remaining, count}
+            // Normalize: Supabase RPC may return object or array
+            const data = Array.isArray(result) ? result[0] : result;
+            if (!data || data.allowed === undefined) {
+                console.warn('[Misil BG] RPC respuesta inesperada:', result);
+                return await manualConsume(session);
+            }
+            await chrome.storage.local.set({ download_count: data.count || 0 });
+            return data; // {allowed, remaining, count}
         }
     } catch { /* RPC unavailable, fallback below */ }
 
@@ -95,7 +101,14 @@ async function refundCredit() {
             headers: authHeaders(session.access_token),
             body: JSON.stringify({ p_user_id: session.user.id })
         });
-        if (!r.ok) {
+        // Normalize RPC response (may be array or object)
+        if (r.ok) {
+            const result = await r.json();
+            const data = Array.isArray(result) ? result[0] : result;
+            if (data) console.log('[Misil BG] Refund OK:', data);
+            return;
+        }
+        // !r.ok fallback:
             // Fallback: manual decrement
             const pr = await fetch(
                 `${SB_URL}/rest/v1/profiles?id=eq.${session.user.id}&select=download_count`,
@@ -111,6 +124,5 @@ async function refundCredit() {
                     });
                 }
             }
-        }
     } catch { /* best effort */ }
 }
