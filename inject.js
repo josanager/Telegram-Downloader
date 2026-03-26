@@ -1,5 +1,6 @@
-// inject.js — Misil v4.0 (MAIN world: detect, capture, download in page context)
-// NEVER sends binary data through messaging. Downloads via <a download>.
+// inject.js — Misil v4.1 (Bug fixes: photo format detection, video blob: handling)
+// MAIN world: detect, capture, download in page context.
+// NEVER sends binary data through messaging.
 
 (function () {
     const tag = document.currentScript;
@@ -9,10 +10,6 @@
     const ORIGIN = location.origin;
     const CH = 'misil';
     if (!NONCE || !ICON) return;
-
-    // ── Logging ──
-    const DEV = false;
-    const log = (...a) => DEV && console.log('[Misil]', ...a);
 
     // ── Toast overlay ──
     function toast(text, type) {
@@ -56,13 +53,46 @@
         });
     }
 
-    // ── Download via <a download> in page context — no messaging of blobs ──
-    async function downloadBlob(url, filename) {
+    // ── Refund helper ──
+    function refundCredit() {
+        send('refund-credit');
+    }
+
+    // ── Derive file extension from blob MIME type ──
+    function extFromMime(mime, fallback) {
+        if (!mime) return fallback;
+        const m = mime.toLowerCase();
+        if (m.includes('webp'))  return '.webp';
+        if (m.includes('png'))   return '.png';
+        if (m.includes('avif'))  return '.avif';
+        if (m.includes('gif'))   return '.gif';
+        if (m.includes('jpeg') || m.includes('jpg')) return '.jpg';
+        if (m.includes('mp4'))   return '.mp4';
+        if (m.includes('webm'))  return '.webm';
+        if (m.includes('ogg'))   return '.ogg';
+        return fallback;
+    }
+
+    // ── Download via <a download> in page context ──
+    async function downloadBlob(url, filenameBase) {
+        console.log('[Misil] URL tipo:', url.startsWith('blob:') ? 'BLOB-INTERNO' : 'HTTPS-OK');
         const r = await fetch(url, { credentials: 'include' });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const blob = await r.blob();
-        if (blob.size < 1000) throw new Error('Archivo vacío o corrupto');
-        log('Blob ready:', blob.size, 'bytes');
+        console.log('[Misil] Blob recibido:', blob.size, 'bytes, tipo:', blob.type);
+
+        // Reject tiny images (thumbnails)
+        if (blob.size < 80000 && blob.type && blob.type.startsWith('image')) {
+            throw new Error('THUMBNAIL');
+        }
+        if (blob.size < 1000) {
+            throw new Error('Archivo vacío o corrupto');
+        }
+
+        // Derive correct extension from actual MIME type
+        const ext = extFromMime(blob.type, '.bin');
+        const filename = filenameBase + ext;
+
         const u = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = u; a.download = filename; a.style.display = 'none';
@@ -74,12 +104,29 @@
 
     // ── Viewer helpers ──
     function closeViewer(v) {
+        if (!v) v = document.querySelector('.media-viewer-whole, #MediaViewer');
+        if (!v) return;
         const b = v.querySelector('.btn-icon.tgico-close, [class*="media-viewer-close"]');
         if (b) b.click();
         else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
     }
 
-    function waitForMedia(isVid) {
+    // ── Try to find a direct HTTPS video URL from the message DOM (before viewer) ──
+    function findPreVideoUrl(media) {
+        // Look for <video> or <source> with an https:// src inside the chat message
+        const vid = media.querySelector('video');
+        if (vid) {
+            const s = vid.currentSrc || vid.src || '';
+            if (s.startsWith('https://')) return s;
+            // Check <source> children
+            const source = vid.querySelector('source[src]');
+            if (source && source.src && source.src.startsWith('https://')) return source.src;
+        }
+        return null;
+    }
+
+    // ── Wait for PHOTO in viewer ──
+    function waitForPhoto() {
         return new Promise((ok, fail) => {
             let t = 0, last = '', stable = 0;
             const iv = setInterval(() => {
@@ -87,48 +134,108 @@
                 const v = document.querySelector('.media-viewer-whole, #MediaViewer');
                 if (!v) { if (t > 75) { clearInterval(iv); fail(new Error('viewer_timeout')); } return; }
 
-                if (isVid) {
-                    const el = v.querySelector('video');
-                    if (el) {
-                        const s = el.currentSrc || el.src || '';
-                        if (s.length > 10 && s !== 'about:blank') {
-                            if (s === last) stable++; else { last = s; stable = 0; }
-                            if (el.readyState >= 2 || stable >= 10) {
-                                clearInterval(iv); closeViewer(v); ok({ url: s, kind: 'video' }); return;
-                            }
-                        }
-                    }
-                } else {
-                    let best = null, bestA = 0;
-                    v.querySelectorAll('img').forEach(im => {
-                        if (im.naturalWidth < 100 || im.naturalHeight < 100) return;
-                        const cn = im.className || '';
-                        if (cn.includes('thumb') || cn.includes('avatar')) return;
-                        const a = im.naturalWidth * im.naturalHeight;
-                        if (a > bestA) { bestA = a; best = im; }
-                    });
-                    if (best && best.naturalWidth > 400) {
-                        const s = best.src;
-                        if (s && s.length > 10) {
-                            if (s === last) stable++; else { last = s; stable = 0; }
-                            if (stable >= 5) {
-                                clearInterval(iv); closeViewer(v); ok({ url: s, kind: 'photo' }); return;
-                            }
+                // Find the largest image in the viewer
+                let best = null, bestA = 0;
+                v.querySelectorAll('img').forEach(im => {
+                    // Filter out ALL small images (thumbnails, icons, avatars)
+                    if (im.naturalWidth < 300 || im.naturalHeight < 300) return;
+                    const cn = im.className || '';
+                    if (cn.includes('thumb') || cn.includes('avatar') || cn.includes('icon')) return;
+                    const a = im.naturalWidth * im.naturalHeight;
+                    if (a > bestA) { bestA = a; best = im; }
+                });
+
+                // Require naturalWidth > 600 for HD confirmation
+                if (best && best.naturalWidth > 600) {
+                    const s = best.src;
+                    if (s && s.length > 10) {
+                        if (s === last) stable++;
+                        else { last = s; stable = 0; }
+
+                        // Wait 8 ticks × 200ms = 1.6 seconds of stable src
+                        if (stable >= 8) {
+                            clearInterval(iv);
+                            ok({ url: s, viewer: v });
+                            return;
                         }
                     }
                 }
-                if (t > 75) { clearInterval(iv); const v2 = document.querySelector('.media-viewer-whole'); if (v2) closeViewer(v2); fail(new Error('capture_timeout')); }
+
+                // Timeout after 15 seconds
+                if (t > 75) {
+                    clearInterval(iv);
+                    fail(new Error('capture_timeout'));
+                }
             }, 200);
         });
     }
 
-    // ── Main flow: click → quota → viewer → fetch → <a download> ──
+    // ── Wait for VIDEO in viewer ──
+    function waitForVideo(preUrl) {
+        return new Promise((ok, fail) => {
+            let t = 0, last = '', stable = 0;
+            const iv = setInterval(() => {
+                t++;
+                const v = document.querySelector('.media-viewer-whole, #MediaViewer');
+                if (!v) { if (t > 60) { clearInterval(iv); fail(new Error('viewer_timeout')); } return; }
+
+                // Strategy 1: Look for <video> with HTTPS src
+                const vid = v.querySelector('video');
+                if (vid) {
+                    let s = vid.currentSrc || vid.src || '';
+
+                    // If it's blob:, DON'T use it — skip to alternatives
+                    if (s.startsWith('blob:')) {
+                        s = ''; // discard blob URL
+                    }
+
+                    // Check <source> elements for https URL
+                    if (!s) {
+                        const source = vid.querySelector('source[src]');
+                        if (source && source.src && source.src.startsWith('https://')) {
+                            s = source.src;
+                        }
+                    }
+
+                    // If still no HTTPS url, try preUrl (from chat DOM)
+                    if (!s && preUrl) {
+                        s = preUrl;
+                    }
+
+                    if (s && s.startsWith('https://') && s.length > 10) {
+                        if (s === last) stable++;
+                        else { last = s; stable = 0; }
+                        if (stable >= 5) {
+                            clearInterval(iv);
+                            ok({ url: s, viewer: v });
+                            return;
+                        }
+                    }
+                }
+
+                // Timeout after 12 seconds (60 ticks × 200ms)
+                if (t > 60) {
+                    clearInterval(iv);
+                    // Check if we only found blob: URLs
+                    const finalVid = v.querySelector('video');
+                    const finalSrc = finalVid ? (finalVid.currentSrc || finalVid.src || '') : '';
+                    if (finalSrc.startsWith('blob:')) {
+                        fail(new Error('blob_protected'));
+                    } else {
+                        fail(new Error('video_timeout'));
+                    }
+                }
+            }, 200);
+        });
+    }
+
+    // ── Main download flow ──
     async function handleClick(media, isVid) {
-        const ext = isVid ? '.mp4' : '.jpg';
-        const fname = 'telegram_' + (isVid ? 'video' : 'foto') + '_' + Date.now() + ext;
+        const prefix = isVid ? 'video' : 'foto';
+        const filenameBase = 'telegram_' + prefix + '_' + Date.now();
 
         try {
-            // 1. Consume quota credit
+            // Step 1: Consume quota credit
             toast('Verificando…', 'info');
             send('consume-credit');
             let quota;
@@ -147,36 +254,68 @@
                 return;
             }
 
-            // 2. Open viewer & capture HD URL
+            // Step 2: For videos, try to grab HTTPS url from chat DOM BEFORE opening viewer
+            let preVideoUrl = null;
+            if (isVid) {
+                preVideoUrl = findPreVideoUrl(media);
+                if (preVideoUrl) {
+                    console.log('[Misil] Pre-captured video URL from DOM:', preVideoUrl.substring(0, 60));
+                }
+            }
+
+            // Step 3: Open viewer
             toast('Procesando…', 'info');
             const target = media.querySelector('img.full-media, video, img, .full-media') || media;
             target.click();
 
-            let cap;
-            try { cap = await waitForMedia(isVid); }
-            catch {
-                toast('No se encontró URL descargable', 'error');
-                send('refund-credit');
+            // Step 4: Wait for media in viewer
+            let captured;
+            try {
+                if (isVid) {
+                    captured = await waitForVideo(preVideoUrl);
+                } else {
+                    captured = await waitForPhoto();
+                }
+            } catch (err) {
+                // Close viewer on any capture error
+                closeViewer(null);
+                if (err.message === 'blob_protected') {
+                    toast('No se pudo obtener la URL del video. Telegram lo protege con streaming interno.', 'error');
+                } else {
+                    toast('No se encontró URL descargable', 'error');
+                }
+                refundCredit();
                 return;
             }
 
-            // 3. Wait for viewer close animation
-            await new Promise(r => setTimeout(r, 600));
+            // Step 5: Close viewer FIRST, then download in background
+            closeViewer(captured.viewer);
+            await new Promise(r => setTimeout(r, 500));
 
-            // 4. Fetch + download in page context
+            // Step 6: Fetch + download
             toast('Descargando…', 'info');
-            const realName = cap.kind === 'video' ? fname.replace(/\.jpg$/, '.mp4') : fname.replace(/\.mp4$/, '.jpg');
-            await downloadBlob(cap.url, realName);
-            toast('✅ ¡Descargado!', 'success');
+            try {
+                const size = await downloadBlob(captured.url, filenameBase);
+                const sizeMB = (size / (1024 * 1024)).toFixed(1);
+                toast('✅ ¡Descargado! (' + sizeMB + ' MB)', 'success');
+            } catch (dlErr) {
+                if (dlErr.message === 'THUMBNAIL') {
+                    // Thumbnail detected — retry logic could go here
+                    toast('Se detectó miniatura en vez de archivo real. Intenta de nuevo.', 'error');
+                    refundCredit();
+                } else {
+                    throw dlErr;
+                }
+            }
 
         } catch (err) {
-            console.error('[Misil]', err);
+            console.error('[Misil] Error en descarga:', err);
             toast('Error: ' + err.message, 'error');
-            send('refund-credit');
+            refundCredit();
         }
     }
 
-    // ── DOM scan with MutationObserver (replaces setInterval) ──
+    // ── DOM scan with MutationObserver ──
     const SEL = '.media-inner, .album-item, .media-photo';
     const VID_SIG = 'video, .video-time, .media-video-time, .icon-large-play, .icon-play';
 
@@ -209,5 +348,5 @@
         debounce = setTimeout(scan, 300);
     }).observe(document.body, { childList: true, subtree: true });
 
-    log('v4.0 loaded');
+    console.log('[Misil] v4.1 loaded');
 })();
