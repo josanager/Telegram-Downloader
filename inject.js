@@ -1,162 +1,213 @@
-// inject.js – Misil v3.2 (Wait for full-res before capture)
+// inject.js — Misil v4.0 (MAIN world: detect, capture, download in page context)
+// NEVER sends binary data through messaging. Downloads via <a download>.
 
 (function () {
-    const currentScript = document.currentScript;
-    const extId = currentScript && currentScript.dataset.extId ? currentScript.dataset.extId : '';
-    const iconUrl = currentScript && currentScript.dataset.iconUrl ? currentScript.dataset.iconUrl : '';
-    console.log('[Misil] v3.2 loaded');
+    const tag = document.currentScript;
+    if (!tag) return;
+    const NONCE = tag.dataset.nonce;
+    const ICON = tag.dataset.iconUrl;
+    const ORIGIN = location.origin;
+    const CH = 'misil';
+    if (!NONCE || !ICON) return;
 
-    // ── Download: fetch in page context, convert to dataURL, send to extension ──
-    async function downloadMedia(url, filename) {
-        try {
-            console.log('[Misil] Fetching:', url.substring(0, 80));
-            const resp = await fetch(url, { credentials: 'include' });
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            const blob = await resp.blob();
-            console.log('[Misil] Blob:', blob.size, 'bytes, type:', blob.type);
+    // ── Logging ──
+    const DEV = false;
+    const log = (...a) => DEV && console.log('[Misil]', ...a);
 
-            // Reject if too small (thumbnail)
-            if (blob.size < 50000 && blob.type.startsWith('image')) {
-                console.warn('[Misil] File too small, likely thumbnail. Retrying...');
-                return false; // Signal to retry
-            }
-
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                window.postMessage({
-                    type: 'MISIL_DOWNLOAD',
-                    dataUrl: reader.result,
-                    filename: filename
-                }, '*');
-            };
-            reader.readAsDataURL(blob);
-            return true;
-        } catch (err) {
-            console.error('[Misil] Download error:', err);
-            return false;
-        }
+    // ── Toast overlay ──
+    function toast(text, type) {
+        let el = document.getElementById('misil-toast');
+        if (el) el.remove();
+        el = document.createElement('div');
+        el.id = 'misil-toast';
+        el.textContent = text;
+        const bg = { info: 'rgba(30,39,64,.92)', success: 'rgba(34,197,94,.18)', error: 'rgba(239,68,68,.18)' };
+        const fg = { info: '#f1f5f9', success: '#22c55e', error: '#ef4444' };
+        const bd = { info: 'rgba(255,55,55,.3)', success: 'rgba(34,197,94,.4)', error: 'rgba(239,68,68,.4)' };
+        Object.assign(el.style, {
+            position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+            padding: '10px 22px', borderRadius: '10px', fontSize: '13px', fontWeight: '500',
+            fontFamily: 'Inter,system-ui,sans-serif', zIndex: '2147483647', pointerEvents: 'none',
+            background: bg[type] || bg.info, color: fg[type] || fg.info,
+            border: '1px solid ' + (bd[type] || bd.info), opacity: '0', transition: 'opacity .25s'
+        });
+        document.body.appendChild(el);
+        requestAnimationFrame(() => { el.style.opacity = '1'; });
+        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3500);
     }
 
-    // ── Viewer: open, wait for FULL-RES media, close, download ──
-    function captureAndDownload(media, isVid) {
-        const ext = isVid ? '.mp4' : '.jpg';
-        const filename = 'telegram_' + (isVid ? 'video' : 'foto') + '_' + Date.now() + ext;
-
-        // Click to open viewer
-        const clickTarget = media.querySelector('img.full-media, video, img, .full-media') || media;
-        clickTarget.click();
-
-        let ticks = 0;
-        let lastSrc = '';
-        let stableTicks = 0; // How many ticks the src has been stable (unchanged)
-
-        const watcher = setInterval(() => {
-            ticks++;
-            const viewer = document.querySelector('.media-viewer-whole, #MediaViewer, .media-viewer-movers');
-            if (!viewer) {
-                if (ticks > 80) clearInterval(watcher);
-                return;
-            }
-
-            // For VIDEOS: look for a video with a real src
-            if (isVid) {
-                const vid = viewer.querySelector('video');
-                if (vid) {
-                    const s = vid.currentSrc || vid.src || '';
-                    if (s.length > 10 && s !== 'about:blank') {
-                        // Wait for the video to have some data loaded
-                        if (vid.readyState >= 2 || stableTicks > 10) {
-                            clearInterval(watcher);
-                            closeViewer(viewer);
-                            const vFilename = filename.replace(/\.jpg$/, '.mp4');
-                            setTimeout(() => downloadMedia(s, vFilename), 600);
-                            return;
-                        }
-                        if (s === lastSrc) stableTicks++;
-                        else { lastSrc = s; stableTicks = 0; }
-                    }
-                }
-            }
-
-            // For PHOTOS: wait for full-res image (naturalWidth > 400)
-            if (!isVid) {
-                const imgs = viewer.querySelectorAll('img');
-                let bestImg = null;
-                let bestSize = 0;
-                imgs.forEach(img => {
-                    // Skip tiny icons, avatars, thumbnails
-                    if (img.naturalWidth < 100 || img.naturalHeight < 100) return;
-                    if (img.classList.contains('thumbnail') || img.className.includes('thumb')) return;
-                    if (img.className.includes('avatar') || img.width < 50) return;
-                    const size = img.naturalWidth * img.naturalHeight;
-                    if (size > bestSize) {
-                        bestSize = size;
-                        bestImg = img;
-                    }
-                });
-
-                if (bestImg && bestImg.naturalWidth > 400) {
-                    const s = bestImg.src || '';
-                    if (s.length > 10) {
-                        // Wait a bit more for highest quality to load
-                        if (s === lastSrc) stableTicks++;
-                        else { lastSrc = s; stableTicks = 0; }
-
-                        // Source stable for 1 second (5 ticks × 200ms) = full quality loaded
-                        if (stableTicks >= 5) {
-                            clearInterval(watcher);
-                            closeViewer(viewer);
-                            const pFilename = filename.replace(/\.mp4$/, '.jpg');
-                            setTimeout(() => downloadMedia(s, pFilename), 600);
-                            return;
-                        }
-                    }
-                }
-            }
-
-            // Timeout after 16 seconds
-            if (ticks > 80) {
-                clearInterval(watcher);
-                closeViewer(viewer);
-            }
-        }, 200);
+    // ── Messaging helpers ──
+    function send(action, extra) {
+        window.postMessage({ channel: CH, nonce: NONCE, action, ...extra }, ORIGIN);
     }
 
-    function closeViewer(viewer) {
-        const closeBtn = viewer.querySelector('.btn-icon.tgico-close, [class*="media-viewer-close"]');
-        if (closeBtn) closeBtn.click();
-        else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-    }
-
-    // ── Inject buttons ──
-    function inject() {
-        document.querySelectorAll('.media-inner, .album-item, .media-photo').forEach(media => {
-            if (media.dataset.misilDone) return;
-
-            const hasVideo = !!media.querySelector('video, .video-time, .media-video-time, .icon-large-play, .icon-play');
-            const hasImg = !hasVideo && !!media.querySelector('img');
-            if (!hasVideo && !hasImg) return;
-
-            media.dataset.misilDone = 'true';
-            if (getComputedStyle(media).position === 'static') media.style.position = 'relative';
-
-            const btn = document.createElement('div');
-            btn.className = 'tmd-dl-btn';
-            btn.innerHTML = `<div class="tmd-dl-hitarea"></div><img class="tmd-dl-icon" src="${iconUrl}" draggable="false" alt="Misil">`;
-
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                btn.classList.add('tmd-dl-btn--pulse');
-                setTimeout(() => btn.classList.remove('tmd-dl-btn--pulse'), 600);
-                captureAndDownload(media, hasVideo);
-            }, true);
-
-            media.appendChild(btn);
+    function waitFor(action, ms) {
+        return new Promise((ok, fail) => {
+            const timer = setTimeout(() => { window.removeEventListener('message', fn); fail(new Error('timeout')); }, ms);
+            function fn(e) {
+                if (e.source !== window || e.origin !== ORIGIN) return;
+                const d = e.data;
+                if (!d || d.channel !== CH || d.nonce !== NONCE || d.action !== action) return;
+                clearTimeout(timer);
+                window.removeEventListener('message', fn);
+                ok(d.data);
+            }
+            window.addEventListener('message', fn);
         });
     }
 
-    setInterval(inject, 1500);
-    inject();
+    // ── Download via <a download> in page context — no messaging of blobs ──
+    async function downloadBlob(url, filename) {
+        const r = await fetch(url, { credentials: 'include' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const blob = await r.blob();
+        if (blob.size < 1000) throw new Error('Archivo vacío o corrupto');
+        log('Blob ready:', blob.size, 'bytes');
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = u; a.download = filename; a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { a.remove(); URL.revokeObjectURL(u); }, 15000);
+        return blob.size;
+    }
+
+    // ── Viewer helpers ──
+    function closeViewer(v) {
+        const b = v.querySelector('.btn-icon.tgico-close, [class*="media-viewer-close"]');
+        if (b) b.click();
+        else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+    }
+
+    function waitForMedia(isVid) {
+        return new Promise((ok, fail) => {
+            let t = 0, last = '', stable = 0;
+            const iv = setInterval(() => {
+                t++;
+                const v = document.querySelector('.media-viewer-whole, #MediaViewer');
+                if (!v) { if (t > 75) { clearInterval(iv); fail(new Error('viewer_timeout')); } return; }
+
+                if (isVid) {
+                    const el = v.querySelector('video');
+                    if (el) {
+                        const s = el.currentSrc || el.src || '';
+                        if (s.length > 10 && s !== 'about:blank') {
+                            if (s === last) stable++; else { last = s; stable = 0; }
+                            if (el.readyState >= 2 || stable >= 10) {
+                                clearInterval(iv); closeViewer(v); ok({ url: s, kind: 'video' }); return;
+                            }
+                        }
+                    }
+                } else {
+                    let best = null, bestA = 0;
+                    v.querySelectorAll('img').forEach(im => {
+                        if (im.naturalWidth < 100 || im.naturalHeight < 100) return;
+                        const cn = im.className || '';
+                        if (cn.includes('thumb') || cn.includes('avatar')) return;
+                        const a = im.naturalWidth * im.naturalHeight;
+                        if (a > bestA) { bestA = a; best = im; }
+                    });
+                    if (best && best.naturalWidth > 400) {
+                        const s = best.src;
+                        if (s && s.length > 10) {
+                            if (s === last) stable++; else { last = s; stable = 0; }
+                            if (stable >= 5) {
+                                clearInterval(iv); closeViewer(v); ok({ url: s, kind: 'photo' }); return;
+                            }
+                        }
+                    }
+                }
+                if (t > 75) { clearInterval(iv); const v2 = document.querySelector('.media-viewer-whole'); if (v2) closeViewer(v2); fail(new Error('capture_timeout')); }
+            }, 200);
+        });
+    }
+
+    // ── Main flow: click → quota → viewer → fetch → <a download> ──
+    async function handleClick(media, isVid) {
+        const ext = isVid ? '.mp4' : '.jpg';
+        const fname = 'telegram_' + (isVid ? 'video' : 'foto') + '_' + Date.now() + ext;
+
+        try {
+            // 1. Consume quota credit
+            toast('Verificando…', 'info');
+            send('consume-credit');
+            let quota;
+            try { quota = await waitFor('consume-result', 8000); }
+            catch { quota = { allowed: true }; } // offline fallback
+
+            if (!quota.allowed) {
+                const msgs = {
+                    not_authenticated: 'Inicia sesión para descargar',
+                    quota_exceeded: 'Cuota agotada este mes',
+                    profile_not_found: 'Perfil no encontrado',
+                    supabase_unavailable: 'Servidor no disponible, intenta luego'
+                };
+                toast(msgs[quota.error] || 'Error de cuota', 'error');
+                if (quota.error === 'not_authenticated') send('open-login');
+                return;
+            }
+
+            // 2. Open viewer & capture HD URL
+            toast('Procesando…', 'info');
+            const target = media.querySelector('img.full-media, video, img, .full-media') || media;
+            target.click();
+
+            let cap;
+            try { cap = await waitForMedia(isVid); }
+            catch {
+                toast('No se encontró URL descargable', 'error');
+                send('refund-credit');
+                return;
+            }
+
+            // 3. Wait for viewer close animation
+            await new Promise(r => setTimeout(r, 600));
+
+            // 4. Fetch + download in page context
+            toast('Descargando…', 'info');
+            const realName = cap.kind === 'video' ? fname.replace(/\.jpg$/, '.mp4') : fname.replace(/\.mp4$/, '.jpg');
+            await downloadBlob(cap.url, realName);
+            toast('✅ ¡Descargado!', 'success');
+
+        } catch (err) {
+            console.error('[Misil]', err);
+            toast('Error: ' + err.message, 'error');
+            send('refund-credit');
+        }
+    }
+
+    // ── DOM scan with MutationObserver (replaces setInterval) ──
+    const SEL = '.media-inner, .album-item, .media-photo';
+    const VID_SIG = 'video, .video-time, .media-video-time, .icon-large-play, .icon-play';
+
+    function scan() {
+        document.querySelectorAll(SEL).forEach(m => {
+            if (m.dataset.misil) return;
+            const isV = !!m.querySelector(VID_SIG);
+            const isI = !isV && !!m.querySelector('img');
+            if (!isV && !isI) return;
+            m.dataset.misil = '1';
+            if (getComputedStyle(m).position === 'static') m.style.position = 'relative';
+
+            const btn = document.createElement('div');
+            btn.className = 'tmd-dl-btn';
+            btn.innerHTML = '<div class="tmd-dl-hitarea"></div><img class="tmd-dl-icon" src="' + ICON + '" draggable="false" alt="Misil">';
+            btn.addEventListener('click', e => {
+                e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+                btn.classList.add('tmd-dl-btn--pulse');
+                setTimeout(() => btn.classList.remove('tmd-dl-btn--pulse'), 600);
+                handleClick(m, isV);
+            }, true);
+            m.appendChild(btn);
+        });
+    }
+
+    scan();
+    let debounce = null;
+    new MutationObserver(() => {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(scan, 300);
+    }).observe(document.body, { childList: true, subtree: true });
+
+    log('v4.0 loaded');
 })();

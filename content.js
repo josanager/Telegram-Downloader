@@ -1,28 +1,50 @@
-// content.js – Misil v3.1
+// content.js — Misil v4.0 (Secure validated bridge)
+// Runs in ISOLATED world. Validates all messages with nonce + origin + shape.
 
-const extId = chrome.runtime.id;
-console.log('[Misil] v3.1 Bridge');
+const EXPECTED_ORIGIN = 'https://web.telegram.org';
+const CHANNEL = 'misil';
+const nonce = crypto.randomUUID();
 
-// Inject the page-context script
-const script = document.createElement('script');
-script.src = chrome.runtime.getURL('inject.js');
-script.dataset.extId = extId;
-script.dataset.iconUrl = chrome.runtime.getURL('icons/miniatura.svg');
-script.onload = function () { this.remove(); };
-(document.head || document.documentElement).appendChild(script);
+// ── Inject MAIN world script with nonce and icon URL ──
+const s = document.createElement('script');
+s.src = chrome.runtime.getURL('inject.js');
+s.dataset.nonce = nonce;
+s.dataset.iconUrl = chrome.runtime.getURL('icons/miniatura.svg');
+s.onload = () => s.remove();
+(document.head || document.documentElement).appendChild(s);
 
-// Listen for download requests from inject.js via postMessage
-window.addEventListener('message', (event) => {
-    if (event.source !== window) return;
-    if (!event.data || event.data.type !== 'MISIL_DOWNLOAD') return;
+// ── Allowed actions from inject.js ──
+const ALLOWED = new Set(['consume-credit', 'refund-credit', 'open-login']);
 
-    const { dataUrl, filename } = event.data;
-    console.log('[Misil Bridge] Received download request:', filename);
+// ── Validated message handler ──
+window.addEventListener('message', async (e) => {
+    if (e.source !== window) return;
+    if (e.origin !== EXPECTED_ORIGIN) return;
+    const m = e.data;
+    if (!m || typeof m !== 'object') return;
+    if (m.channel !== CHANNEL || m.nonce !== nonce) return;
+    if (!ALLOWED.has(m.action)) return;
 
-    // Send dataURL to background for chrome.downloads
-    chrome.runtime.sendMessage({
-        action: 'download-data',
-        dataUrl: dataUrl,
-        filename: filename
-    }).catch(err => console.error('[Misil Bridge] Send error:', err));
+    if (m.action === 'open-login') {
+        chrome.runtime.sendMessage({ action: 'open-sidepanel' }).catch(() => {});
+        return;
+    }
+
+    if (m.action === 'refund-credit') {
+        chrome.runtime.sendMessage({ action: 'refund-credit' }).catch(() => {});
+        return;
+    }
+
+    if (m.action === 'consume-credit') {
+        try {
+            const resp = await chrome.runtime.sendMessage({ action: 'consume-credit' });
+            reply('consume-result', resp);
+        } catch {
+            reply('consume-result', { allowed: false, error: 'extension_error' });
+        }
+    }
 });
+
+function reply(action, data) {
+    window.postMessage({ channel: CHANNEL, nonce, action, data }, EXPECTED_ORIGIN);
+}

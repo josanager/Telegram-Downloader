@@ -1,18 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Misil - Telegram Downloader",
-  "version": "2.2.0",
-  "description": "High-speed media downloader for Telegram Web. Save protected videos and images directly to your Downloads folder.",
+  "version": "4.0.0",
+  "description": "Download permitted media from Telegram Web with one click.",
   "permissions": [
-    "activeTab",
-    "downloads",
-    "offscreen",
-    "sidePanel",
-    "storage"
+    "storage",
+    "sidePanel"
   ],
   "host_permissions": [
-    "*://web.telegram.org/*",
-    "*://cqgpbmxcavdvcvcoojyi.supabase.co/*"
+    "https://web.telegram.org/*",
+    "https://cqgpbmxcavdvcvcoojyi.supabase.co/*"
   ],
   "side_panel": {
     "default_path": "sidepanel.html"
@@ -22,26 +19,17 @@
       "resources": [
         "inject.js",
         "styles.css",
-        "icons/logo.svg",
         "icons/miniatura.svg"
       ],
-      "matches": [
-        "*://web.telegram.org/*"
-      ]
+      "matches": ["https://web.telegram.org/*"]
     }
   ],
   "content_scripts": [
     {
-      "matches": [
-        "*://web.telegram.org/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "css": [
-        "styles.css"
-      ],
-      "run_at": "document_end"
+      "matches": ["https://web.telegram.org/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
     }
   ],
   "action": {

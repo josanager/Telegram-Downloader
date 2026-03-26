@@ -1,137 +1,72 @@
-// supabase-client.js (Lightweight REST wrapper for extensions)
-// Connected to project: cqgpbmxcavdvcvcoojyi (Misil)
+// supabase-client.js — Misil v4.0 (Lightweight REST wrapper, anon key only)
 
-const SUPABASE_URL = "https://cqgpbmxcavdvcvcoojyi.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxZ3BibXhjYXZkdmN2Y29vanlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0ODM5NjYsImV4cCI6MjA4OTA1OTk2Nn0.yLz5CnPJW8w7aOarAYDPyB_dYInyB9gKNpBwLpWOoqg";
+const SUPABASE_URL = 'https://cqgpbmxcavdvcvcoojyi.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxZ3BibXhjYXZkdmN2Y29vanlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0ODM5NjYsImV4cCI6MjA4OTA1OTk2Nn0.yLz5CnPJW8w7aOarAYDPyB_dYInyB9gKNpBwLpWOoqg';
 
-const headers = {
-    'apikey': SUPABASE_ANON_KEY,
-    'Content-Type': 'application/json'
-};
+const baseHeaders = { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
 
 class SupabaseClient {
+    // ── Session management ──
     static async getSession() {
-        return new Promise(resolve => {
-            chrome.storage.local.get(['sb_session'], result => resolve(result.sb_session));
-        });
+        return new Promise(ok => chrome.storage.local.get(['sb_session'], r => ok(r.sb_session || null)));
     }
 
-    static async setSession(sessionData) {
-        await chrome.storage.local.set({ 'sb_session': sessionData });
+    static async setSession(data) {
+        await chrome.storage.local.set({ sb_session: data });
     }
 
+    // ── Auth ──
     static async signUp(email, password) {
-        const response = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-            method: 'POST',
-            headers,
+        const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+            method: 'POST', headers: baseHeaders,
             body: JSON.stringify({ email, password })
         });
-        const data = await response.json();
-        if (!response.ok) {
-            const msg = data.msg || data.message || data.error_description || data.error || JSON.stringify(data);
-            throw new Error(msg);
-        }
-        if (data.session) {
-            await this.setSession(data.session);
-            await this.ensureProfile(data.user.id, email);
-        } else if (data.user && !data.session) {
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.msg || d.message || d.error_description || d.error || 'Error de registro');
+        if (d.session) {
+            await this.setSession(d.session);
+            await this.ensureProfile(d.user.id, email);
+        } else if (d.user && !d.session) {
             throw new Error('Confirma tu correo antes de ingresar.');
         }
-        return data;
+        return d;
     }
 
     static async signIn(email, password) {
-        const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-            method: 'POST',
-            headers,
+        const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+            method: 'POST', headers: baseHeaders,
             body: JSON.stringify({ email, password })
         });
-        const data = await response.json();
-        if (!response.ok) {
-            const msg = data.error_description || data.msg || data.message || data.error || 'Error de conexión';
-            throw new Error(msg);
-        }
-        await this.setSession(data);
-        await this.ensureProfile(data.user.id, email);
-        return data;
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error_description || d.msg || d.message || d.error || 'Credenciales inválidas');
+        await this.setSession(d);
+        await this.ensureProfile(d.user.id, email);
+        return d;
     }
 
     static async signOut() {
         await chrome.storage.local.remove(['sb_session', 'download_count']);
     }
 
+    // ── Profile ──
     static async getProfile() {
-        const session = await this.getSession();
-        if (!session) return null;
-
-        const authHeaders = {
-            ...headers,
-            'Authorization': `Bearer ${session.access_token}`
-        };
-
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}&select=*`, {
-            headers: authHeaders
+        const s = await this.getSession();
+        if (!s) return null;
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${s.user.id}&select=*`, {
+            headers: { ...baseHeaders, 'Authorization': `Bearer ${s.access_token}` }
         });
-
-        if (!response.ok) return null;
-        const data = await response.json();
-        return data.length > 0 ? data[0] : null;
+        if (!r.ok) return null;
+        const rows = await r.json();
+        return rows.length > 0 ? rows[0] : null;
     }
 
     static async ensureProfile(userId, email) {
-        const session = await this.getSession();
-        if (!session) return;
-        
-        // Try insert, ignore if exists (upsert)
-        const authHeaders = {
-            ...headers,
-            'Authorization': `Bearer ${session.access_token}`,
-            'Prefer': 'resolution=merge-duplicates'
-        };
-
+        const s = await this.getSession();
+        if (!s) return;
         await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
             method: 'POST',
-            headers: authHeaders,
-            body: JSON.stringify({
-                id: userId,
-                email: email,
-                download_count: 0,
-                plan: 'free'
-            })
-        });
-    }
-
-    static async incrementDownload() {
-        const session = await this.getSession();
-        if (!session) throw new Error("No session");
-
-        const authHeaders = {
-            ...headers,
-            'Authorization': `Bearer ${session.access_token}`
-        };
-
-        // Call a Supabase RPC to safely increment
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/increment_download`, {
-            method: 'POST',
-            headers: authHeaders,
-            body: JSON.stringify({ user_id: session.user.id })
-        });
-
-        if (!response.ok) {
-            // Fallback if RPC doesn't exist: fetch current, increment, update
-            // (You should create the RPC in Supabase later for safety)
-            const profile = await this.getProfile();
-            if (profile) {
-                await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}`, {
-                    method: 'PATCH',
-                    headers: authHeaders,
-                    body: JSON.stringify({ download_count: profile.download_count + 1 })
-                });
-                return profile.download_count + 1;
-            }
-        } else {
-            const currentCount = await response.json(); // RPC returns new count
-            return currentCount;
-        }
+            headers: { ...baseHeaders, 'Authorization': `Bearer ${s.access_token}`, 'Prefer': 'resolution=merge-duplicates' },
+            body: JSON.stringify({ id: userId, email, download_count: 0, plan: 'free' })
+        }).catch(() => {});
     }
 }
