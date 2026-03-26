@@ -22,19 +22,21 @@
         el = document.createElement('div');
         el.id = 'misil-toast';
         el.textContent = text;
-        const bg = { info: 'rgba(30,39,64,.92)', success: 'rgba(34,197,94,.18)', error: 'rgba(239,68,68,.18)' };
-        const fg = { info: '#f1f5f9', success: '#22c55e', error: '#ef4444' };
-        const bd = { info: 'rgba(255,55,55,.3)', success: 'rgba(34,197,94,.4)', error: 'rgba(239,68,68,.4)' };
+        // Info (processing) is dark bg with red text. Success/Error are red bg with white text. No translucency.
+        const bg = { info: 'rgb(30,39,64)', success: 'rgb(255,55,55)', error: 'rgb(255,55,55)' };
+        const fg = { info: 'rgb(255,55,55)', success: '#ffffff', error: '#ffffff' };
+        const bd = { info: 'rgb(255,55,55)', success: '#ffffff', error: '#ffffff' };
         Object.assign(el.style, {
             position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
-            padding: '10px 22px', borderRadius: '10px', fontSize: '13px', fontWeight: '500',
+            padding: '12px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: '600',
             fontFamily: 'Inter,system-ui,sans-serif', zIndex: '2147483647', pointerEvents: 'none',
             background: bg[type] || bg.info, color: fg[type] || fg.info,
-            border: '1px solid ' + (bd[type] || bd.info), opacity: '0', transition: 'opacity .25s'
+            border: '2px solid ' + (bd[type] || bd.info), opacity: '0', transition: 'opacity .25s',
+            boxShadow: '0 8px 16px rgba(0,0,0,0.3)'
         });
         document.body.appendChild(el);
         requestAnimationFrame(() => { el.style.opacity = '1'; });
-        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3500);
+        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 4000);
     }
 
     // ── Messaging helpers ──
@@ -170,7 +172,7 @@
                     }
 
                     const pct = Math.round((_next_offset * 100) / _total_size);
-                    toast('Descargando… ' + pct + '%', 'info');
+                    toast('Procesando… ' + pct + '%', 'info');
 
                     if (_next_offset < _total_size) {
                         fetchNextPart(); // Recursive: get next chunk
@@ -402,9 +404,9 @@
             if (!isVid) {
                 // ── PHOTO: Direct anchor download (tel_download_image pattern) ──
                 try {
-                    toast('Descargando foto…', 'info');
+                    toast('Procesando foto…', 'info');
                     tel_download_image(captured.url, filenameBase);
-                    toast('✅ ¡Foto descargada!', 'success');
+                    toast('✅ proceso terminado proceso finalizado', 'success');
                 } catch (err) {
                     console.error('[Misil] Image download error:', err);
                     toast('Error: ' + err.message, 'error');
@@ -413,10 +415,10 @@
             } else {
                 // ── VIDEO: Range-header chunked fetch (tel_download_video pattern) ──
                 try {
-                    toast('Descargando video…', 'info');
+                    toast('Procesando video…', 'info');
                     const size = await tel_download_video(captured.url, filenameBase);
                     const sizeMB = (size / (1024 * 1024)).toFixed(1);
-                    toast('✅ ¡Video descargado! (' + sizeMB + ' MB)', 'success');
+                    toast('✅ proceso terminado proceso finalizado (' + sizeMB + ' MB)', 'success');
                 } catch (err) {
                     console.error('[Misil] Video download error:', err);
                     toast('Error: ' + err.message, 'error');

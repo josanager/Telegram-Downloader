@@ -9,7 +9,7 @@ const nonce = crypto.randomUUID();
 const s = document.createElement('script');
 s.src = chrome.runtime.getURL('inject.js');
 s.dataset.nonce = nonce;
-s.dataset.iconUrl = chrome.runtime.getURL('icons/miniatura.svg');
+s.dataset.iconUrl = chrome.runtime.getURL('icons/boton.svg');
 s.onload = () => s.remove();
 (document.head || document.documentElement).appendChild(s);
 

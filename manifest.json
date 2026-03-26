@@ -19,7 +19,7 @@
       "resources": [
         "inject.js",
         "styles.css",
-        "icons/miniatura.svg"
+        "icons/boton.svg"
       ],
       "matches": ["https://web.telegram.org/*"]
     }

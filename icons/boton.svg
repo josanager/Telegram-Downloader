@@ -2,9 +2,11 @@
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg width="100%" height="100%" viewBox="0 0 1900 1900" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
     <g transform="matrix(1,0,0,1,-4790.831176,-167.630949)">
-        <g id="Mesa-de-trabajo1" serif:id="Mesa de trabajo1" transform="matrix(1,0,0,1,2486.836703,10.359286)">
-            <rect x="2303.994" y="157.272" width="1899.099" height="1899.099" style="fill:rgb(255,55,55);"/>
-            <g transform="matrix(0.843963,0,0,0.843963,467.805886,219.859485)">
+        <g transform="matrix(1,0,0,1,2486.836703,10.359286)">
+            <g transform="matrix(1,0,0,1,-2486.836703,-10.359286)">
+                <circle cx="5740.381" cy="1117.18" r="949.549" style="fill:rgb(255,55,55);"/>
+            </g>
+            <g transform="matrix(0.703991,0,0,0.703991,929.82483,366.963425)">
                 <g transform="matrix(4.078125,4.078125,-3.30457,3.30457,3167.679885,-2995.620162)">
                     <g id="IMG_1316.JPG">
                         <path d="M564.15,705.504C563.222,753.989 529.558,766.614 513.574,812.549C511.875,817.433 510.572,806.133 503.25,793.644C485.202,762.862 446.75,726.952 464.985,683.713C467.222,678.408 478.774,660.023 479.97,668.433C483.638,694.217 500.617,719.343 510.181,740.652C512.207,745.167 513.419,742.824 513.561,742.549C540.705,690.073 543.199,682.182 544.848,668.552C545.859,660.192 557.331,678.8 559.063,682.704C563.981,693.786 563.979,702.287 564.15,705.504Z" style="fill:white;"/>

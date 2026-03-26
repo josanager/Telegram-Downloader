@@ -37,7 +37,8 @@
   z-index: 2 !important;
   width: 32px !important;
   height: 32px !important;
-  border-radius: 6px !important;
+  border-radius: 0 !important;
+  background: none !important;
   display: block !important;
   pointer-events: none !important;
   filter: drop-shadow(0 2px 6px rgba(0,0,0,0.55)) !important;
@@ -70,14 +71,14 @@
   justify-content: center !important;
   width: 40px !important;
   height: 40px !important;
-  background: rgba(0,0,0,0.4) !important;
+  background: rgb(30, 39, 64) !important;
   border-radius: 50% !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
+  border: 1px solid rgb(255, 55, 55) !important;
   cursor: pointer !important;
   margin: 0 10px !important;
   transition: background 0.2s !important;
   z-index: 2147483647 !important;
 }
 .tmd-viewer-btn:hover {
-  background: rgba(255,55,55,0.7) !important;
+  background: rgb(255, 55, 55) !important;
 }
