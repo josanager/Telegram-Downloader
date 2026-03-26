@@ -68,7 +68,9 @@
         console.log('[Misil] tel_download_image:', imageUrl.substring(0, 80));
         const fileName = filenameBase + '.jpeg';
         const a = document.createElement('a');
+        a.style.display = 'none';
         document.body.appendChild(a);
+        a.addEventListener('click', e => e.stopPropagation());
         a.href = imageUrl;
         a.download = fileName;
         a.click();
@@ -190,7 +192,9 @@
                 console.log('[Misil] Blob final:', blob.size, 'bytes');
 
                 const a = document.createElement('a');
+                a.style.display = 'none';
                 document.body.appendChild(a);
+                a.addEventListener('click', e => e.stopPropagation());
                 a.href = blobUrl;
                 a.download = fileName;
                 a.click();
