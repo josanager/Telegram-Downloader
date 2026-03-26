@@ -1,6 +1,8 @@
-// inject.js — Misil v4.3 (Direct <a> for photos, Range-header chunked fetch for videos)
-// MAIN world: detect, capture, download in page context.
-// NEVER sends binary data through messaging.
+// inject.js — Misil v4.4 (Architecture ported from Neet-Nestor/Telegram-Media-Downloader)
+// MAIN world: detect media, download in page context.
+// Key discovery: Telegram serves content on Range requests (HTTP 206) even when
+// normal GET redirects to CDN login page. For images, the viewer img.src is directly
+// downloadable via <a download>. NEVER sends binary data through messaging.
 
 (function () {
     const tag = document.currentScript;
@@ -10,6 +12,8 @@
     const ORIGIN = location.origin;
     const CH = 'misil';
     if (!NONCE || !ICON) return;
+
+    const contentRangeRegex = /^bytes (\d+)-(\d+)\/(\d+)$/;
 
     // ── Toast overlay ──
     function toast(text, type) {
@@ -53,99 +57,153 @@
         });
     }
 
-    // ── Refund helper ──
     function refundCredit() {
         send('refund-credit');
     }
 
-    // ══════════════════════════════════════════════════════════════
-    // ── PHOTO DOWNLOAD: Direct <a href=src download> — no fetch ──
-    // ══════════════════════════════════════════════════════════════
-    function downloadImage(imgSrc, filenameBase) {
-        console.log('[Misil] Foto: descarga directa via <a>:', imgSrc.substring(0, 80));
+    // ══════════════════════════════════════════════════════════════════════════
+    // ── PHOTO DOWNLOAD — Direct anchor click (same as tel_download_image) ──
+    // ══════════════════════════════════════════════════════════════════════════
+    function tel_download_image(imageUrl, filenameBase) {
+        console.log('[Misil] tel_download_image:', imageUrl.substring(0, 80));
+        const fileName = filenameBase + '.jpeg';
         const a = document.createElement('a');
-        a.style.display = 'none';
         document.body.appendChild(a);
-        a.href = imgSrc;
-        a.download = filenameBase + '.jpg';
+        a.href = imageUrl;
+        a.download = fileName;
         a.click();
         document.body.removeChild(a);
+        console.log('[Misil] Image download triggered:', fileName);
     }
 
-    // ══════════════════════════════════════════════════════════════════
-    // ── VIDEO DOWNLOAD: Fetch with Range header in recursive chunks ──
-    // ══════════════════════════════════════════════════════════════════
-    async function downloadVideoChunked(url, filenameBase) {
-        console.log('[Misil] Video: descarga chunked con Range header');
-        console.log('[Misil] URL:', url.substring(0, 80));
+    // ══════════════════════════════════════════════════════════════════════════
+    // ── VIDEO DOWNLOAD — Range-header chunked fetch (from tel_download_video)
+    // ══════════════════════════════════════════════════════════════════════════
+    function tel_download_video(url, filenameBase) {
+        return new Promise((resolve, reject) => {
+            let _blobs = [];
+            let _next_offset = 0;
+            let _total_size = null;
+            let _file_extension = 'mp4';
+            let fileName = filenameBase + '.' + _file_extension;
 
-        const blobs = [];
-        let nextOffset = 0;
-        let totalSize = null;
-        const filename = filenameBase + '.mp4';
-
-        async function fetchChunk() {
-            console.log('[Misil] Fetching chunk desde offset:', nextOffset);
-            const r = await fetch(url, {
-                method: 'GET',
-                headers: { 'Range': 'bytes=' + nextOffset + '-' }
-            });
-
-            if (![200, 206].includes(r.status)) {
-                throw new Error('HTTP ' + r.status + ' en chunk');
-            }
-
-            const contentType = (r.headers.get('content-type') || '').split(';')[0].trim();
-            console.log('[Misil] Chunk status:', r.status, 'content-type:', contentType);
-
-            if (contentType.includes('text/html')) {
-                throw new Error('Respuesta HTML: servidor redirigió a login');
-            }
-
-            const rangeHeader = r.headers.get('content-range');
-            if (rangeHeader) {
-                // Format: "bytes START-END/TOTAL"
-                const match = rangeHeader.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/);
-                if (match) {
-                    nextOffset = parseInt(match[2]) + 1;
-                    totalSize = parseInt(match[3]);
-                    console.log('[Misil] Content-Range:', rangeHeader, '→ next:', nextOffset, '/ total:', totalSize);
+            // Try to extract fileName from Telegram's stream URL metadata
+            try {
+                const parts = url.split('/');
+                const metadata = JSON.parse(decodeURIComponent(parts[parts.length - 1]));
+                if (metadata.fileName) {
+                    fileName = metadata.fileName;
                 }
-            } else {
-                // HTTP 200: server sent entire file in one response
-                const blob = await r.blob();
-                totalSize = blob.size;
-                nextOffset = totalSize;
-                blobs.push(blob);
-                console.log('[Misil] Respuesta completa (200), tamaño:', blob.size);
-                return;
+            } catch (e) {
+                // Not a metadata URL, use default fileName
             }
 
-            const blob = await r.blob();
-            blobs.push(blob);
+            console.log('[Misil] tel_download_video start:', url.substring(0, 80));
+            console.log('[Misil] fileName:', fileName);
 
-            const pct = totalSize ? Math.round((nextOffset / totalSize) * 100) : 0;
-            toast('Descargando… ' + pct + '%', 'info');
+            const fetchNextPart = () => {
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Range': 'bytes=' + _next_offset + '-'
+                    }
+                })
+                .then(res => {
+                    if (![200, 206].includes(res.status)) {
+                        throw new Error('HTTP ' + res.status + ' — no es 200/206');
+                    }
 
-            if (nextOffset < totalSize) {
-                await fetchChunk();
-            }
-        }
+                    const mime = (res.headers.get('Content-Type') || 'video/mp4').split(';')[0];
+                    console.log('[Misil] Chunk response:', res.status, 'MIME:', mime);
 
-        await fetchChunk();
+                    if (mime.startsWith('text/html')) {
+                        throw new Error('Servidor devolvió HTML en vez de video (redirect a login)');
+                    }
 
-        const finalBlob = new Blob(blobs, { type: 'video/mp4' });
-        console.log('[Misil] Video completo:', finalBlob.size, 'bytes (' + blobs.length + ' chunks)');
+                    // Update file extension from actual MIME
+                    if (mime.startsWith('video/') || mime.startsWith('audio/')) {
+                        _file_extension = mime.split('/')[1];
+                        const dotIdx = fileName.lastIndexOf('.');
+                        if (dotIdx > 0) {
+                            fileName = fileName.substring(0, dotIdx + 1) + _file_extension;
+                        }
+                    }
 
-        const u = URL.createObjectURL(finalBlob);
-        const a = document.createElement('a');
-        a.href = u;
-        a.download = filename;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { a.remove(); URL.revokeObjectURL(u); }, 15000);
-        return finalBlob.size;
+                    const rangeHeader = res.headers.get('Content-Range');
+                    if (rangeHeader) {
+                        const match = rangeHeader.match(contentRangeRegex);
+                        if (match) {
+                            const startOffset = parseInt(match[1]);
+                            const endOffset = parseInt(match[2]);
+                            const totalSize = parseInt(match[3]);
+
+                            if (startOffset !== _next_offset) {
+                                console.error('[Misil] Gap detected! Expected:', _next_offset, 'Got:', startOffset);
+                                throw new Error('Gap en la respuesta del servidor');
+                            }
+                            if (_total_size && totalSize !== _total_size) {
+                                throw new Error('Tamaño total cambió durante descarga');
+                            }
+
+                            _next_offset = endOffset + 1;
+                            _total_size = totalSize;
+
+                            console.log('[Misil] Range:', rangeHeader,
+                                '→ progreso:', Math.round((_next_offset * 100) / _total_size) + '%');
+                        }
+                    } else {
+                        // HTTP 200: single response, no chunking
+                        console.log('[Misil] Respuesta completa (HTTP 200, sin Content-Range)');
+                    }
+
+                    return res.blob();
+                })
+                .then(resBlob => {
+                    _blobs.push(resBlob);
+
+                    // If no Content-Range was received, we got everything in one shot
+                    if (!_total_size) {
+                        _total_size = resBlob.size;
+                        _next_offset = _total_size;
+                    }
+
+                    const pct = Math.round((_next_offset * 100) / _total_size);
+                    toast('Descargando… ' + pct + '%', 'info');
+
+                    if (_next_offset < _total_size) {
+                        fetchNextPart(); // Recursive: get next chunk
+                    } else {
+                        // All chunks received — concatenate and download
+                        save();
+                    }
+                })
+                .catch(err => {
+                    console.error('[Misil] Chunk fetch error:', err);
+                    reject(err);
+                });
+            };
+
+            const save = () => {
+                console.log('[Misil] Concatenando', _blobs.length, 'chunks...');
+                const blob = new Blob(_blobs, { type: 'video/' + _file_extension });
+                const blobUrl = URL.createObjectURL(blob);
+                console.log('[Misil] Blob final:', blob.size, 'bytes');
+
+                const a = document.createElement('a');
+                document.body.appendChild(a);
+                a.href = blobUrl;
+                a.download = fileName;
+                a.click();
+                document.body.removeChild(a);
+
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+                console.log('[Misil] Video download triggered:', fileName);
+                resolve(blob.size);
+            };
+
+            // Start fetching
+            fetchNextPart();
+        });
     }
 
     // ══════════════════════════════════════════
@@ -159,111 +217,129 @@
         else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
     }
 
-    // ── Try to find a direct HTTPS video URL from the message DOM (before viewer) ──
     function findPreVideoUrl(media) {
         const vid = media.querySelector('video');
         if (vid) {
             const s = vid.currentSrc || vid.src || '';
-            if (s.startsWith('https://')) return s;
+            if (s.length > 10 && !s.startsWith('blob:')) return s;
             const source = vid.querySelector('source[src]');
-            if (source && source.src && source.src.startsWith('https://')) return source.src;
+            if (source && source.src && !source.src.startsWith('blob:')) return source.src;
         }
         return null;
     }
 
-    // ══════════════════════════════════════════
-    // ── Wait for PHOTO in viewer ──
-    // ══════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════
+    // ── Wait for PHOTO in viewer (same as reference: detect img in viewer)
+    // ══════════════════════════════════════════════════════════════════════
     function waitForPhoto() {
         return new Promise((ok, fail) => {
             let t = 0, last = '', stable = 0;
             const iv = setInterval(() => {
                 t++;
-                const v = document.querySelector('.media-viewer-whole, #MediaViewer');
-                if (!v) { if (t > 75) { clearInterval(iv); fail(new Error('viewer_timeout')); } return; }
 
-                let best = null, bestA = 0;
-                v.querySelectorAll('img').forEach(im => {
-                    if (im.naturalWidth < 300 || im.naturalHeight < 300) return;
-                    const cn = im.className || '';
-                    if (cn.includes('thumb') || cn.includes('avatar') || cn.includes('icon')) return;
-                    const a = im.naturalWidth * im.naturalHeight;
-                    if (a > bestA) { bestA = a; best = im; }
-                });
-
-                if (best && best.naturalWidth > 600) {
-                    const s = best.src;
-                    if (s && s.length > 10) {
-                        if (s === last) stable++;
-                        else { last = s; stable = 0; }
-                        // 8 ticks × 200ms = 1.6s stable
-                        if (stable >= 8) {
+                // Strategy A: /a/ webapp — #MediaViewer
+                const mediaViewerA = document.querySelector('#MediaViewer .MediaViewerSlide--active');
+                if (mediaViewerA) {
+                    const img = mediaViewerA.querySelector('.MediaViewerContent > div > img');
+                    if (img && img.src && img.src.length > 10) {
+                        if (img.src === last) stable++;
+                        else { last = img.src; stable = 0; }
+                        if (stable >= 5) {
                             clearInterval(iv);
-                            ok({ url: s, viewer: v });
+                            const viewer = document.querySelector('#MediaViewer');
+                            ok({ url: img.src, viewer: viewer });
                             return;
                         }
                     }
                 }
 
-                if (t > 75) { clearInterval(iv); fail(new Error('capture_timeout')); }
+                // Strategy B: /k/ webapp — .media-viewer-whole
+                const mediaViewerK = document.querySelector('.media-viewer-whole');
+                if (mediaViewerK) {
+                    const aspecter = mediaViewerK.querySelector('.media-viewer-movers .media-viewer-aspecter');
+                    if (aspecter) {
+                        // Reference script uses img.thumbnail for /k/
+                        const img = aspecter.querySelector('img.thumbnail') || aspecter.querySelector('img');
+                        if (img && img.src && img.src.length > 10) {
+                            if (img.src === last) stable++;
+                            else { last = img.src; stable = 0; }
+                            if (stable >= 5) {
+                                clearInterval(iv);
+                                ok({ url: img.src, viewer: mediaViewerK });
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                if (t > 75) { clearInterval(iv); fail(new Error('viewer_timeout')); }
             }, 200);
         });
     }
 
-    // ══════════════════════════════════════════
-    // ── Wait for VIDEO in viewer ──
-    // ══════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════
+    // ── Wait for VIDEO in viewer (get video.currentSrc or video.src)
+    // ══════════════════════════════════════════════════════════════════════
     function waitForVideo(preUrl) {
         return new Promise((ok, fail) => {
             let t = 0, last = '', stable = 0;
             const iv = setInterval(() => {
                 t++;
-                const v = document.querySelector('.media-viewer-whole, #MediaViewer');
-                if (!v) { if (t > 60) { clearInterval(iv); fail(new Error('viewer_timeout')); } return; }
 
-                const vid = v.querySelector('video');
-                if (vid) {
-                    let s = vid.currentSrc || vid.src || '';
-
-                    // If blob: URL, DON'T use it directly
-                    if (s.startsWith('blob:')) {
-                        s = '';
-                    }
-
-                    // Check <source> elements
-                    if (!s) {
-                        const source = vid.querySelector('source[src]');
-                        if (source && source.src && source.src.startsWith('https://')) {
-                            s = source.src;
-                        }
-                    }
-
-                    // Fallback to pre-captured URL from chat DOM
-                    if (!s && preUrl) {
-                        s = preUrl;
-                    }
-
-                    if (s && s.startsWith('https://') && s.length > 10) {
-                        if (s === last) stable++;
-                        else { last = s; stable = 0; }
-                        if (stable >= 5) {
-                            clearInterval(iv);
-                            ok({ url: s, viewer: v });
-                            return;
+                // Strategy A: /a/ webapp — #MediaViewer
+                const mediaViewerA = document.querySelector('#MediaViewer .MediaViewerSlide--active');
+                if (mediaViewerA) {
+                    const videoPlayer = mediaViewerA.querySelector('.MediaViewerContent > .VideoPlayer');
+                    if (videoPlayer) {
+                        const vid = videoPlayer.querySelector('video');
+                        if (vid) {
+                            let s = vid.currentSrc || vid.src || '';
+                            // Reference script uses currentSrc directly (even blob:)
+                            if (s.length > 10) {
+                                if (s === last) stable++;
+                                else { last = s; stable = 0; }
+                                if (stable >= 5) {
+                                    clearInterval(iv);
+                                    const viewer = document.querySelector('#MediaViewer');
+                                    ok({ url: s, viewer: viewer });
+                                    return;
+                                }
+                            }
                         }
                     }
                 }
 
-                // 60 ticks × 200ms = 12 seconds
+                // Strategy B: /k/ webapp — .media-viewer-whole
+                const mediaViewerK = document.querySelector('.media-viewer-whole');
+                if (mediaViewerK) {
+                    const aspecter = mediaViewerK.querySelector('.media-viewer-movers .media-viewer-aspecter');
+                    if (aspecter) {
+                        const vid = aspecter.querySelector('video');
+                        if (vid) {
+                            let s = vid.currentSrc || vid.src || '';
+                            if (s.length > 10) {
+                                if (s === last) stable++;
+                                else { last = s; stable = 0; }
+                                if (stable >= 5) {
+                                    clearInterval(iv);
+                                    ok({ url: s, viewer: mediaViewerK });
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback to pre-captured URL
+                if (!last && preUrl && t > 20) {
+                    clearInterval(iv);
+                    ok({ url: preUrl, viewer: document.querySelector('.media-viewer-whole, #MediaViewer') });
+                    return;
+                }
+
                 if (t > 60) {
                     clearInterval(iv);
-                    const finalVid = v.querySelector('video');
-                    const finalSrc = finalVid ? (finalVid.currentSrc || finalVid.src || '') : '';
-                    if (finalSrc.startsWith('blob:')) {
-                        fail(new Error('blob_protected'));
-                    } else {
-                        fail(new Error('video_timeout'));
-                    }
+                    fail(new Error('video_timeout'));
                 }
             }, 200);
         });
@@ -296,12 +372,12 @@
                 return;
             }
 
-            // Step 2: Pre-capture video URL from chat DOM
+            // Step 2: Pre-capture video URL from chat DOM before opening viewer
             let preVideoUrl = null;
             if (isVid) {
                 preVideoUrl = findPreVideoUrl(media);
                 if (preVideoUrl) {
-                    console.log('[Misil] Pre-captured video URL from DOM:', preVideoUrl.substring(0, 60));
+                    console.log('[Misil] Pre-captured video URL:', preVideoUrl.substring(0, 60));
                 }
             }
 
@@ -310,7 +386,7 @@
             const target = media.querySelector('img.full-media, video, img, .full-media') || media;
             target.click();
 
-            // Step 4: Wait for media in viewer
+            // Step 4: Wait for media URL in viewer
             let captured;
             try {
                 if (isVid) {
@@ -320,47 +396,43 @@
                 }
             } catch (err) {
                 closeViewer(null);
-                if (err.message === 'blob_protected') {
-                    toast('No se pudo obtener la URL del video. Telegram lo protege con streaming interno.', 'error');
-                } else {
-                    toast('No se encontró URL descargable', 'error');
-                }
+                toast('No se encontró URL descargable', 'error');
                 refundCredit();
                 return;
             }
 
-            // Step 5: Close viewer FIRST, then download in background
+            // Step 5: Close viewer FIRST, then download
             closeViewer(captured.viewer);
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => setTimeout(r, 400));
 
             // Step 6: Download
             if (!isVid) {
-                // ── PHOTO: Direct <a href=src download> ──
+                // ── PHOTO: Direct anchor download (tel_download_image pattern) ──
                 try {
                     toast('Descargando foto…', 'info');
-                    downloadImage(captured.url, filenameBase);
+                    tel_download_image(captured.url, filenameBase);
                     toast('✅ ¡Foto descargada!', 'success');
-                } catch (imgErr) {
-                    console.error('[Misil] Foto download falló:', imgErr);
-                    toast('Error: ' + imgErr.message, 'error');
+                } catch (err) {
+                    console.error('[Misil] Image download error:', err);
+                    toast('Error: ' + err.message, 'error');
                     refundCredit();
                 }
             } else {
-                // ── VIDEO: Chunked fetch with Range header ──
+                // ── VIDEO: Range-header chunked fetch (tel_download_video pattern) ──
                 try {
                     toast('Descargando video…', 'info');
-                    const size = await downloadVideoChunked(captured.url, filenameBase);
+                    const size = await tel_download_video(captured.url, filenameBase);
                     const sizeMB = (size / (1024 * 1024)).toFixed(1);
                     toast('✅ ¡Video descargado! (' + sizeMB + ' MB)', 'success');
-                } catch (dlErr) {
-                    console.error('[Misil] Video download falló:', dlErr);
-                    toast('Error: ' + dlErr.message, 'error');
+                } catch (err) {
+                    console.error('[Misil] Video download error:', err);
+                    toast('Error: ' + err.message, 'error');
                     refundCredit();
                 }
             }
 
         } catch (err) {
-            console.error('[Misil] Error general en descarga:', err);
+            console.error('[Misil] Error general:', err);
             toast('Error: ' + err.message, 'error');
             refundCredit();
         }
@@ -401,5 +473,5 @@
         debounce = setTimeout(scan, 300);
     }).observe(document.body, { childList: true, subtree: true });
 
-    console.log('[Misil] v4.3 loaded');
+    console.log('[Misil] v4.4 loaded (architecture from Neet-Nestor/Telegram-Media-Downloader)');
 })();
