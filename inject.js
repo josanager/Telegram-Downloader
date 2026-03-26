@@ -1,90 +1,131 @@
-// inject.js – Misil v3.1 (Click → Download, fixed cross-world messaging)
+// inject.js – Misil v3.2 (Wait for full-res before capture)
 
 (function () {
     const currentScript = document.currentScript;
     const extId = currentScript && currentScript.dataset.extId ? currentScript.dataset.extId : '';
     const iconUrl = currentScript && currentScript.dataset.iconUrl ? currentScript.dataset.iconUrl : '';
-    console.log('[Misil] v3.1 loaded');
+    console.log('[Misil] v3.2 loaded');
 
-    // ── Download: fetch in page context (has cookies), convert to dataURL, send to extension ──
+    // ── Download: fetch in page context, convert to dataURL, send to extension ──
     async function downloadMedia(url, filename) {
         try {
-            console.log('[Misil] Fetching:', url.substring(0, 60));
+            console.log('[Misil] Fetching:', url.substring(0, 80));
             const resp = await fetch(url, { credentials: 'include' });
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const blob = await resp.blob();
-            console.log('[Misil] Blob size:', blob.size, 'type:', blob.type);
+            console.log('[Misil] Blob:', blob.size, 'bytes, type:', blob.type);
 
-            // Convert blob to data URL (works for any size, just a string)
+            // Reject if too small (thumbnail)
+            if (blob.size < 50000 && blob.type.startsWith('image')) {
+                console.warn('[Misil] File too small, likely thumbnail. Retrying...');
+                return false; // Signal to retry
+            }
+
             const reader = new FileReader();
             reader.onloadend = () => {
-                const dataUrl = reader.result;
-                console.log('[Misil] DataURL ready, sending to extension. Length:', dataUrl.length);
-                // Send via postMessage (works across isolated worlds)
                 window.postMessage({
                     type: 'MISIL_DOWNLOAD',
-                    dataUrl: dataUrl,
+                    dataUrl: reader.result,
                     filename: filename
                 }, '*');
             };
             reader.readAsDataURL(blob);
+            return true;
         } catch (err) {
             console.error('[Misil] Download error:', err);
+            return false;
         }
     }
 
-    // ── Open viewer, capture URL, close, download ──
+    // ── Viewer: open, wait for FULL-RES media, close, download ──
     function captureAndDownload(media, isVid) {
         const ext = isVid ? '.mp4' : '.jpg';
         const filename = 'telegram_' + (isVid ? 'video' : 'foto') + '_' + Date.now() + ext;
 
-        // Click media to open viewer
+        // Click to open viewer
         const clickTarget = media.querySelector('img.full-media, video, img, .full-media') || media;
         clickTarget.click();
 
         let ticks = 0;
+        let lastSrc = '';
+        let stableTicks = 0; // How many ticks the src has been stable (unchanged)
+
         const watcher = setInterval(() => {
             ticks++;
             const viewer = document.querySelector('.media-viewer-whole, #MediaViewer, .media-viewer-movers');
             if (!viewer) {
-                if (ticks > 60) clearInterval(watcher);
+                if (ticks > 80) clearInterval(watcher);
                 return;
             }
 
-            const vid = viewer.querySelector('video');
-            const img = viewer.querySelector('img.full-media, img:not(.thumbnail):not([class*="thumb"]):not([class*="avatar"])');
-
-            let src = null;
-            let foundVideo = false;
-            if (vid) {
-                const s = vid.currentSrc || vid.src || '';
-                if (s.length > 10 && s !== 'about:blank') { src = s; foundVideo = true; }
+            // For VIDEOS: look for a video with a real src
+            if (isVid) {
+                const vid = viewer.querySelector('video');
+                if (vid) {
+                    const s = vid.currentSrc || vid.src || '';
+                    if (s.length > 10 && s !== 'about:blank') {
+                        // Wait for the video to have some data loaded
+                        if (vid.readyState >= 2 || stableTicks > 10) {
+                            clearInterval(watcher);
+                            closeViewer(viewer);
+                            const vFilename = filename.replace(/\.jpg$/, '.mp4');
+                            setTimeout(() => downloadMedia(s, vFilename), 600);
+                            return;
+                        }
+                        if (s === lastSrc) stableTicks++;
+                        else { lastSrc = s; stableTicks = 0; }
+                    }
+                }
             }
-            if (!src && img) {
-                const s = img.src || '';
-                if (s.length > 10) src = s;
+
+            // For PHOTOS: wait for full-res image (naturalWidth > 400)
+            if (!isVid) {
+                const imgs = viewer.querySelectorAll('img');
+                let bestImg = null;
+                let bestSize = 0;
+                imgs.forEach(img => {
+                    // Skip tiny icons, avatars, thumbnails
+                    if (img.naturalWidth < 100 || img.naturalHeight < 100) return;
+                    if (img.classList.contains('thumbnail') || img.className.includes('thumb')) return;
+                    if (img.className.includes('avatar') || img.width < 50) return;
+                    const size = img.naturalWidth * img.naturalHeight;
+                    if (size > bestSize) {
+                        bestSize = size;
+                        bestImg = img;
+                    }
+                });
+
+                if (bestImg && bestImg.naturalWidth > 400) {
+                    const s = bestImg.src || '';
+                    if (s.length > 10) {
+                        // Wait a bit more for highest quality to load
+                        if (s === lastSrc) stableTicks++;
+                        else { lastSrc = s; stableTicks = 0; }
+
+                        // Source stable for 1 second (5 ticks × 200ms) = full quality loaded
+                        if (stableTicks >= 5) {
+                            clearInterval(watcher);
+                            closeViewer(viewer);
+                            const pFilename = filename.replace(/\.mp4$/, '.jpg');
+                            setTimeout(() => downloadMedia(s, pFilename), 600);
+                            return;
+                        }
+                    }
+                }
             }
 
-            if (src) {
+            // Timeout after 16 seconds
+            if (ticks > 80) {
                 clearInterval(watcher);
-                const actualFilename = foundVideo
-                    ? filename.replace(/\.jpg$/, '.mp4')
-                    : filename.replace(/\.mp4$/, '.jpg');
-
-                // Close viewer
-                const closeBtn = viewer.querySelector('.btn-icon.tgico-close, [class*="media-viewer-close"]');
-                if (closeBtn) closeBtn.click();
-                else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-
-                setTimeout(() => downloadMedia(src, actualFilename), 600);
-                return;
-            }
-
-            if (ticks > 60) {
-                clearInterval(watcher);
-                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+                closeViewer(viewer);
             }
         }, 200);
+    }
+
+    function closeViewer(viewer) {
+        const closeBtn = viewer.querySelector('.btn-icon.tgico-close, [class*="media-viewer-close"]');
+        if (closeBtn) closeBtn.click();
+        else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
     }
 
     // ── Inject buttons ──
