@@ -45,6 +45,17 @@ window.addEventListener('message', async (e) => {
     }
 });
 
+// ── Auth State Relay ──
+chrome.storage.local.get(['sb_session'], (res) => {
+    reply('auth-state', { isAuthenticated: !!res.sb_session });
+});
+
+chrome.storage.onChanged.addListener((changes) => {
+    if (changes.sb_session) {
+        reply('auth-state', { isAuthenticated: !!changes.sb_session.newValue });
+    }
+});
+
 function reply(action, data) {
     window.postMessage({ channel: CHANNEL, nonce, action, data }, EXPECTED_ORIGIN);
 }

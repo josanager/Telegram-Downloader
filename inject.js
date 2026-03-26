@@ -359,13 +359,24 @@
         const filenameBase = 'telegram_' + prefix + '_' + Date.now();
 
         try {
-            // BYPASS DE BASE DE DATOS Y CUOTA PARA PRUEBAS (SOLICITADO POR USUARIO)
-            // toast('Verificando…', 'info');
-            // send('consume-credit');
-            // let quota;
-            // try { quota = await waitFor('consume-result', 8000); }
-            // catch { quota = { allowed: true }; }
-            // if (!quota.allowed) { ... return; }
+            // Step 1: Consume quota credit
+            toast('Verificando…', 'info');
+            send('consume-credit');
+            let quota;
+            try { quota = await waitFor('consume-result', 8000); }
+            catch { quota = { allowed: true }; } // offline fallback
+
+            if (!quota.allowed) {
+                const msgs = {
+                    not_authenticated: 'Inicia sesión para descargar',
+                    quota_exceeded: 'Cuota agotada este mes',
+                    profile_not_found: 'Perfil no encontrado',
+                    supabase_unavailable: 'Servidor no disponible, intenta luego'
+                };
+                toast(msgs[quota.error] || 'Error de cuota', 'error');
+                if (quota.error === 'not_authenticated') send('open-login');
+                return;
+            }
 
             // Step 2: Pre-capture video URL from chat DOM before opening viewer
             let preVideoUrl = null;
@@ -461,12 +472,43 @@
         });
     }
 
-    scan();
     let debounce = null;
-    new MutationObserver(() => {
-        if (debounce) clearTimeout(debounce);
-        debounce = setTimeout(scan, 300);
-    }).observe(document.body, { childList: true, subtree: true });
+    let observer = null;
 
-    console.log('[Misil] v4.4 loaded (architecture from Neet-Nestor/Telegram-Media-Downloader)');
+    function startScanning() {
+        if (observer) return;
+        scan();
+        observer = new MutationObserver(() => {
+            if (debounce) clearTimeout(debounce);
+            debounce = setTimeout(scan, 300);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    function stopScanning() {
+        if (observer) {
+            observer.disconnect();
+            observer = null;
+        }
+        document.querySelectorAll('.tmd-dl-btn').forEach(b => b.remove());
+        document.querySelectorAll('[data-misil]').forEach(m => delete m.dataset.misil);
+    }
+
+    window.addEventListener('message', (e) => {
+        if (e.source !== window || e.origin !== ORIGIN) return;
+        const d = e.data;
+        if (!d || d.channel !== CH || d.nonce !== NONCE) return;
+        
+        if (d.action === 'auth-state') {
+            if (d.data.isAuthenticated) {
+                console.log('[Misil] User authenticated. Activating downloader UI.');
+                startScanning();
+            } else {
+                console.log('[Misil] User unauthenticated. Disabling downloader UI.');
+                stopScanning();
+            }
+        }
+    });
+
+    console.log('[Misil] v4.5 loaded (Auth-conditional UI + Architecture from Neet-Nestor/Telegram-Media-Downloader)');
 })();
