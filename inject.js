@@ -353,24 +353,13 @@
         const filenameBase = 'telegram_' + prefix + '_' + Date.now();
 
         try {
-            // Step 1: Consume quota credit
-            toast('Verificando…', 'info');
-            send('consume-credit');
-            let quota;
-            try { quota = await waitFor('consume-result', 8000); }
-            catch { quota = { allowed: true }; } // offline fallback
-
-            if (!quota.allowed) {
-                const msgs = {
-                    not_authenticated: 'Inicia sesión para descargar',
-                    quota_exceeded: 'Cuota agotada este mes',
-                    profile_not_found: 'Perfil no encontrado',
-                    supabase_unavailable: 'Servidor no disponible, intenta luego'
-                };
-                toast(msgs[quota.error] || 'Error de cuota', 'error');
-                if (quota.error === 'not_authenticated') send('open-login');
-                return;
-            }
+            // BYPASS DE BASE DE DATOS Y CUOTA PARA PRUEBAS (SOLICITADO POR USUARIO)
+            // toast('Verificando…', 'info');
+            // send('consume-credit');
+            // let quota;
+            // try { quota = await waitFor('consume-result', 8000); }
+            // catch { quota = { allowed: true }; }
+            // if (!quota.allowed) { ... return; }
 
             // Step 2: Pre-capture video URL from chat DOM before opening viewer
             let preVideoUrl = null;
