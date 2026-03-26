@@ -1,4 +1,4 @@
-// inject.js — Misil v4.2 (Canvas extraction for photos, multi-fetch for videos)
+// inject.js — Misil v4.3 (Direct <a> for photos, Range-header chunked fetch for videos)
 // MAIN world: detect, capture, download in page context.
 // NEVER sends binary data through messaging.
 
@@ -58,148 +58,86 @@
         send('refund-credit');
     }
 
-    // ── Derive file extension from blob MIME type ──
-    function extFromMime(mime, fallback) {
-        if (!mime) return fallback;
-        const m = mime.toLowerCase();
-        if (m.includes('webp'))  return '.webp';
-        if (m.includes('png'))   return '.png';
-        if (m.includes('avif'))  return '.avif';
-        if (m.includes('gif'))   return '.gif';
-        if (m.includes('jpeg') || m.includes('jpg')) return '.jpg';
-        if (m.includes('mp4'))   return '.mp4';
-        if (m.includes('webm'))  return '.webm';
-        if (m.includes('ogg'))   return '.ogg';
-        return fallback;
+    // ══════════════════════════════════════════════════════════════
+    // ── PHOTO DOWNLOAD: Direct <a href=src download> — no fetch ──
+    // ══════════════════════════════════════════════════════════════
+    function downloadImage(imgSrc, filenameBase) {
+        console.log('[Misil] Foto: descarga directa via <a>:', imgSrc.substring(0, 80));
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.href = imgSrc;
+        a.download = filenameBase + '.jpg';
+        a.click();
+        document.body.removeChild(a);
     }
 
-    // ══════════════════════════════════════════════════════════
-    // ── PHOTO DOWNLOAD: Canvas extraction (no fetch needed) ──
-    // ══════════════════════════════════════════════════════════
-    async function downloadFromImg(imgElement, filenameBase) {
-        if (!imgElement.complete || imgElement.naturalWidth === 0) {
-            throw new Error('Imagen no cargada en memoria');
-        }
-        console.log('[Misil] Canvas extraction:', imgElement.naturalWidth, 'x', imgElement.naturalHeight);
+    // ══════════════════════════════════════════════════════════════════
+    // ── VIDEO DOWNLOAD: Fetch with Range header in recursive chunks ──
+    // ══════════════════════════════════════════════════════════════════
+    async function downloadVideoChunked(url, filenameBase) {
+        console.log('[Misil] Video: descarga chunked con Range header');
+        console.log('[Misil] URL:', url.substring(0, 80));
 
-        const canvas = document.createElement('canvas');
-        canvas.width = imgElement.naturalWidth;
-        canvas.height = imgElement.naturalHeight;
-        const ctx = canvas.getContext('2d');
+        const blobs = [];
+        let nextOffset = 0;
+        let totalSize = null;
+        const filename = filenameBase + '.mp4';
 
-        try {
-            ctx.drawImage(imgElement, 0, 0);
-        } catch (e) {
-            console.error('[Misil] drawImage failed:', e);
-            throw new Error('CANVAS_TAINTED');
-        }
+        async function fetchChunk() {
+            console.log('[Misil] Fetching chunk desde offset:', nextOffset);
+            const r = await fetch(url, {
+                method: 'GET',
+                headers: { 'Range': 'bytes=' + nextOffset + '-' }
+            });
 
-        // Check for tainted canvas (cross-origin without CORS headers)
-        try {
-            canvas.toDataURL(); // This throws if tainted
-        } catch (e) {
-            console.error('[Misil] Canvas tainted (cross-origin):', e);
-            throw new Error('CANVAS_TAINTED');
-        }
+            if (![200, 206].includes(r.status)) {
+                throw new Error('HTTP ' + r.status + ' en chunk');
+            }
 
-        return new Promise((resolve, reject) => {
-            canvas.toBlob(blob => {
-                if (!blob || blob.size < 10000) {
-                    reject(new Error('THUMBNAIL'));
-                    return;
+            const contentType = (r.headers.get('content-type') || '').split(';')[0].trim();
+            console.log('[Misil] Chunk status:', r.status, 'content-type:', contentType);
+
+            if (contentType.includes('text/html')) {
+                throw new Error('Respuesta HTML: servidor redirigió a login');
+            }
+
+            const rangeHeader = r.headers.get('content-range');
+            if (rangeHeader) {
+                // Format: "bytes START-END/TOTAL"
+                const match = rangeHeader.match(/^bytes\s+(\d+)-(\d+)\/(\d+)$/);
+                if (match) {
+                    nextOffset = parseInt(match[2]) + 1;
+                    totalSize = parseInt(match[3]);
+                    console.log('[Misil] Content-Range:', rangeHeader, '→ next:', nextOffset, '/ total:', totalSize);
                 }
-                console.log('[Misil] Canvas blob:', blob.size, 'bytes, tipo:', blob.type);
-                const filename = filenameBase + '.jpg';
-                const u = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = u;
-                a.download = filename;
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => { a.remove(); URL.revokeObjectURL(u); }, 15000);
-                resolve(blob.size);
-            }, 'image/jpeg', 0.95);
-        });
-    }
+            } else {
+                // HTTP 200: server sent entire file in one response
+                const blob = await r.blob();
+                totalSize = blob.size;
+                nextOffset = totalSize;
+                blobs.push(blob);
+                console.log('[Misil] Respuesta completa (200), tamaño:', blob.size);
+                return;
+            }
 
-    // ══════════════════════════════════════════════════════════
-    // ── VIDEO DOWNLOAD: Multi-fetch with HTML redirect detect ─
-    // ══════════════════════════════════════════════════════════
-    async function downloadBlob(url, filenameBase) {
-        console.log('[Misil] URL tipo:', url.startsWith('blob:') ? 'BLOB-INTERNO' : 'HTTPS-OK');
-        console.log('[Misil] Intentando URL:', url.substring(0, 80));
+            const blob = await r.blob();
+            blobs.push(blob);
 
-        // Helper: try a fetch, return null if response is HTML (login redirect)
-        async function tryFetch(fetchUrl, opts) {
-            try {
-                const r = await fetch(fetchUrl, opts);
-                const ct = r.headers.get('content-type') || '';
-                console.log('[Misil] tryFetch status:', r.status, 'content-type:', ct);
-                if (ct.includes('text/html')) {
-                    console.warn('[Misil] Respuesta HTML detectada (login redirect), descartando');
-                    return null;
-                }
-                if (!r.ok) {
-                    console.warn('[Misil] Respuesta HTTP no-ok:', r.status);
-                    return null;
-                }
-                return r;
-            } catch (err) {
-                console.warn('[Misil] Fetch error:', err.message);
-                return null;
+            const pct = totalSize ? Math.round((nextOffset / totalSize) * 100) : 0;
+            toast('Descargando… ' + pct + '%', 'info');
+
+            if (nextOffset < totalSize) {
+                await fetchChunk();
             }
         }
 
-        let r = null;
+        await fetchChunk();
 
-        // Intento 1: con cookies de sesión de web.telegram.org
-        console.log('[Misil] Intento 1: fetch con cookies (credentials: include)');
-        r = await tryFetch(url, { credentials: 'include', redirect: 'follow' });
+        const finalBlob = new Blob(blobs, { type: 'video/mp4' });
+        console.log('[Misil] Video completo:', finalBlob.size, 'bytes (' + blobs.length + ' chunks)');
 
-        // Intento 2: sin cookies (para CDN público que no requiere auth)
-        if (!r) {
-            console.log('[Misil] Intento 2: fetch sin cookies (credentials: omit)');
-            r = await tryFetch(url, { credentials: 'omit', redirect: 'follow' });
-        }
-
-        // Intento 3: sin seguir redirects, intentar capturar Location header
-        if (!r) {
-            console.log('[Misil] Intento 3: redirect manual para capturar Location');
-            try {
-                const rRaw = await fetch(url, { credentials: 'omit', redirect: 'manual' });
-                console.log('[Misil] Redirect manual status:', rRaw.status, 'type:', rRaw.type);
-                const redirectUrl = rRaw.headers.get('location');
-                if (redirectUrl && redirectUrl.startsWith('https://')) {
-                    console.log('[Misil] Location header encontrado:', redirectUrl.substring(0, 80));
-                    r = await tryFetch(redirectUrl, { credentials: 'omit', redirect: 'follow' });
-                } else {
-                    console.warn('[Misil] Location header no accesible (CORS opaco) o vacío');
-                }
-            } catch (err) {
-                console.warn('[Misil] Intento 3 falló:', err.message);
-            }
-        }
-
-        // All attempts failed
-        if (!r) {
-            throw new Error('URL protegida: todos los intentos fallaron (HTTP 302 sin acceso)');
-        }
-
-        const blob = await r.blob();
-        console.log('[Misil] Blob recibido:', blob.size, 'bytes, tipo:', blob.type);
-
-        if (!blob || blob.size < 1000) {
-            throw new Error('Archivo vacío o corrupto');
-        }
-        if (blob.type && blob.type.includes('text/html')) {
-            throw new Error('Respuesta HTML en blob: URL expirada o protegida');
-        }
-
-        const ext = extFromMime(blob.type, '.mp4');
-        const filename = filenameBase + ext;
-
-        const u = URL.createObjectURL(blob);
+        const u = URL.createObjectURL(finalBlob);
         const a = document.createElement('a');
         a.href = u;
         a.download = filename;
@@ -207,7 +145,7 @@
         document.body.appendChild(a);
         a.click();
         setTimeout(() => { a.remove(); URL.revokeObjectURL(u); }, 15000);
-        return blob.size;
+        return finalBlob.size;
     }
 
     // ══════════════════════════════════════════
@@ -261,8 +199,7 @@
                         // 8 ticks × 200ms = 1.6s stable
                         if (stable >= 8) {
                             clearInterval(iv);
-                            // Return the img element for canvas extraction
-                            ok({ url: s, viewer: v, imgElement: best });
+                            ok({ url: s, viewer: v });
                             return;
                         }
                     }
@@ -397,46 +334,22 @@
             await new Promise(r => setTimeout(r, 500));
 
             // Step 6: Download
-            toast('Descargando…', 'info');
-
             if (!isVid) {
-                // ── PHOTO: Canvas extraction (primary), fetch as fallback ──
+                // ── PHOTO: Direct <a href=src download> ──
                 try {
-                    console.log('[Misil] Foto: intentando canvas extraction');
-                    const size = await downloadFromImg(captured.imgElement, filenameBase);
-                    const sizeMB = (size / (1024 * 1024)).toFixed(1);
-                    toast('✅ ¡Foto descargada! (' + sizeMB + ' MB)', 'success');
-                } catch (canvasErr) {
-                    if (canvasErr.message === 'THUMBNAIL') {
-                        console.warn('[Misil] Canvas produjo thumbnail, descartando');
-                        toast('Se detectó miniatura en vez de archivo real. Intenta de nuevo.', 'error');
-                        refundCredit();
-                        return;
-                    }
-                    if (canvasErr.message === 'CANVAS_TAINTED') {
-                        console.warn('[Misil] Canvas tainted, intentando fetch como fallback');
-                        try {
-                            const size = await downloadBlob(captured.url, filenameBase);
-                            const sizeMB = (size / (1024 * 1024)).toFixed(1);
-                            toast('✅ ¡Foto descargada! (' + sizeMB + ' MB)', 'success');
-                        } catch (fetchErr) {
-                            console.error('[Misil] Foto: fetch fallback también falló:', fetchErr);
-                            toast('Error: ' + fetchErr.message, 'error');
-                            refundCredit();
-                        }
-                        return;
-                    }
-                    // Any other canvas error
-                    console.error('[Misil] Canvas error inesperado:', canvasErr);
-                    toast('Error: ' + canvasErr.message, 'error');
+                    toast('Descargando foto…', 'info');
+                    downloadImage(captured.url, filenameBase);
+                    toast('✅ ¡Foto descargada!', 'success');
+                } catch (imgErr) {
+                    console.error('[Misil] Foto download falló:', imgErr);
+                    toast('Error: ' + imgErr.message, 'error');
                     refundCredit();
                 }
-
             } else {
-                // ── VIDEO: Multi-attempt fetch ──
+                // ── VIDEO: Chunked fetch with Range header ──
                 try {
-                    console.log('[Misil] Video: intentando multi-fetch');
-                    const size = await downloadBlob(captured.url, filenameBase);
+                    toast('Descargando video…', 'info');
+                    const size = await downloadVideoChunked(captured.url, filenameBase);
                     const sizeMB = (size / (1024 * 1024)).toFixed(1);
                     toast('✅ ¡Video descargado! (' + sizeMB + ' MB)', 'success');
                 } catch (dlErr) {
@@ -488,5 +401,5 @@
         debounce = setTimeout(scan, 300);
     }).observe(document.body, { childList: true, subtree: true });
 
-    console.log('[Misil] v4.2 loaded');
+    console.log('[Misil] v4.3 loaded');
 })();
