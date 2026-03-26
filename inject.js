@@ -1,31 +1,39 @@
-// inject.js – Misil v3.0 (Simple: Click → Download)
+// inject.js – Misil v3.1 (Click → Download, fixed cross-world messaging)
 
 (function () {
     const currentScript = document.currentScript;
     const extId = currentScript && currentScript.dataset.extId ? currentScript.dataset.extId : '';
     const iconUrl = currentScript && currentScript.dataset.iconUrl ? currentScript.dataset.iconUrl : '';
-    console.log('[Misil] v3.0 Simple Mode');
+    console.log('[Misil] v3.1 loaded');
 
-    // ── Download: fetch in page context, convert to blob URL, send to extension ──
+    // ── Download: fetch in page context (has cookies), convert to dataURL, send to extension ──
     async function downloadMedia(url, filename) {
         try {
-            console.log('[Misil] Fetching:', url.substring(0, 80) + '...');
+            console.log('[Misil] Fetching:', url.substring(0, 60));
             const resp = await fetch(url, { credentials: 'include' });
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const blob = await resp.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            console.log('[Misil] Blob ready, requesting download:', filename);
+            console.log('[Misil] Blob size:', blob.size, 'type:', blob.type);
 
-            // Send to extension for download via chrome.downloads API
-            window.dispatchEvent(new CustomEvent('MisilDownload_' + extId, {
-                detail: { blobUrl, filename }
-            }));
+            // Convert blob to data URL (works for any size, just a string)
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const dataUrl = reader.result;
+                console.log('[Misil] DataURL ready, sending to extension. Length:', dataUrl.length);
+                // Send via postMessage (works across isolated worlds)
+                window.postMessage({
+                    type: 'MISIL_DOWNLOAD',
+                    dataUrl: dataUrl,
+                    filename: filename
+                }, '*');
+            };
+            reader.readAsDataURL(blob);
         } catch (err) {
             console.error('[Misil] Download error:', err);
         }
     }
 
-    // ── Viewer capture: open viewer, wait for URL, close, download ──
+    // ── Open viewer, capture URL, close, download ──
     function captureAndDownload(media, isVid) {
         const ext = isVid ? '.mp4' : '.jpg';
         const filename = 'telegram_' + (isVid ? 'video' : 'foto') + '_' + Date.now() + ext;
@@ -39,7 +47,7 @@
             ticks++;
             const viewer = document.querySelector('.media-viewer-whole, #MediaViewer, .media-viewer-movers');
             if (!viewer) {
-                if (ticks > 60) { clearInterval(watcher); }
+                if (ticks > 60) clearInterval(watcher);
                 return;
             }
 
@@ -49,22 +57,16 @@
             let src = null;
             let foundVideo = false;
             if (vid) {
-                src = vid.currentSrc || vid.src || '';
-                if (src && src.length > 10 && src !== 'about:blank') {
-                    foundVideo = true;
-                } else {
-                    src = null;
-                }
+                const s = vid.currentSrc || vid.src || '';
+                if (s.length > 10 && s !== 'about:blank') { src = s; foundVideo = true; }
             }
             if (!src && img) {
-                src = img.src || '';
-                if (!src || src.length < 10) src = null;
+                const s = img.src || '';
+                if (s.length > 10) src = s;
             }
 
             if (src) {
                 clearInterval(watcher);
-
-                // Fix extension based on actual content
                 const actualFilename = foundVideo
                     ? filename.replace(/\.jpg$/, '.mp4')
                     : filename.replace(/\.mp4$/, '.jpg');
@@ -74,8 +76,7 @@
                 if (closeBtn) closeBtn.click();
                 else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
 
-                // Wait for close, then download
-                setTimeout(() => downloadMedia(src, actualFilename), 500);
+                setTimeout(() => downloadMedia(src, actualFilename), 600);
                 return;
             }
 
@@ -88,9 +89,7 @@
 
     // ── Inject buttons ──
     function inject() {
-        const containers = document.querySelectorAll('.media-inner, .album-item, .media-photo');
-
-        containers.forEach(media => {
+        document.querySelectorAll('.media-inner, .album-item, .media-photo').forEach(media => {
             if (media.dataset.misilDone) return;
 
             const hasVideo = !!media.querySelector('video, .video-time, .media-video-time, .icon-large-play, .icon-play');
@@ -100,7 +99,6 @@
             media.dataset.misilDone = 'true';
             if (getComputedStyle(media).position === 'static') media.style.position = 'relative';
 
-            const isVid = hasVideo;
             const btn = document.createElement('div');
             btn.className = 'tmd-dl-btn';
             btn.innerHTML = `<div class="tmd-dl-hitarea"></div><img class="tmd-dl-icon" src="${iconUrl}" draggable="false" alt="Misil">`;
@@ -109,11 +107,9 @@
                 e.preventDefault();
                 e.stopPropagation();
                 e.stopImmediatePropagation();
-
                 btn.classList.add('tmd-dl-btn--pulse');
                 setTimeout(() => btn.classList.remove('tmd-dl-btn--pulse'), 600);
-
-                captureAndDownload(media, isVid);
+                captureAndDownload(media, hasVideo);
             }, true);
 
             media.appendChild(btn);
