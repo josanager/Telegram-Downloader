@@ -25,11 +25,7 @@ chrome.runtime.onMessage.addListener((message) => {
     if (type === 'relay-chunk') {
         const buffer = buffers.get(data.downloadId);
         if (buffer) {
-            const binary = atob(data.base64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
-            }
+            const bytes = new Uint8Array(data.chunk);
             buffer.chunks.push(bytes);
         }
     }

@@ -1,4 +1,4 @@
-// sidepanel.js – Misil v2.2.2
+// sidepanel.js – Misil v2.3.0
 
 let isLoginMode = true;
 
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (message.type === 'media-added')         addMediaToPanel(message.data);
 
         // Per-item download progress events
-        if (message.type === 'panel-download-start')    setItemStatus(message.data.thumbId, 'Iniciando...', 0);
+        if (message.type === 'panel-download-start')    setItemStatus(message.data.thumbId, 'Iniciando descarga...', 0);
         if (message.type === 'panel-download-size')     setItemSize(message.data.thumbId, message.data.totalMb);
         if (message.type === 'panel-download-progress') setItemStatus(message.data.thumbId, `${message.data.receivedMb} MB`, message.data.percent);
         if (message.type === 'panel-download-done') {
@@ -112,7 +112,6 @@ function updateQuota(count) {
 // ── MEDIA PANEL ──
 
 function addMediaToPanel(data) {
-
     const list  = document.getElementById('media-list');
     const empty = document.getElementById('media-empty');
     if (empty) empty.style.display = 'none';
@@ -141,34 +140,22 @@ function addMediaToPanel(data) {
                     <span class="m-size" style="display:none;"></span>
                 </div>
             </div>
-            <button class="m-dl-btn" style="width:32px;height:32px;border-radius:8px;background:#FF3737;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .1s;" title="Descargar">
-                <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:white;"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-            </button>
         </div>
-        <div class="m-bar-wrap" style="display:none;background:rgba(255,255,255,0.06);border-radius:4px;height:3px;overflow:hidden;">
-            <div class="m-bar" style="height:100%;background:#FF3737;border-radius:4px;width:0%;transition:width .3s ease;"></div>
+        <div class="m-bar-wrap" style="display:block;background:rgba(255,255,255,0.06);border-radius:4px;height:3px;overflow:hidden;">
+            <div class="m-bar" style="height:100%;background:#FF3737;border-radius:4px;width:10%;transition:width .3s ease;animation:pulse-bar 1s infinite alternate;"></div>
         </div>
-        <div class="m-status" style="font-size:11px;color:#64748b;display:none;"></div>
+        <div class="m-status" style="font-size:11px;color:#64748b;display:block;">Buscando archivo original...</div>
     `;
 
-    // Download button click
-    item.querySelector('.m-dl-btn').onclick = () => {
-        chrome.tabs.query({ url: '*://web.telegram.org/*' }, (tabs) => {
-            if (tabs.length > 0) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    type: 'trigger-panel-download',
-                    data: { thumbId: data.thumbId }
-                });
-            }
-        });
-    };
+    // Add pulse animation for indeterminate state if not exists
+    if (!document.getElementById('pulse-anim-style')) {
+        const style = document.createElement('style');
+        style.id = 'pulse-anim-style';
+        style.textContent = '@keyframes pulse-bar { from { opacity: 0.5; } to { opacity: 1; } }';
+        document.head.appendChild(style);
+    }
 
-    // Hover effect on download button
-    const dlBtn = item.querySelector('.m-dl-btn');
-    dlBtn.onmouseover = () => dlBtn.style.transform = 'scale(1.1)';
-    dlBtn.onmouseout  = () => dlBtn.style.transform = 'scale(1)';
-
-    list.appendChild(item);
+    list.prepend(item); // Add to top of list
 }
 
 function getItem(thumbId) {
@@ -180,12 +167,10 @@ function setItemStatus(thumbId, text, percent) {
     const barWrap = el.querySelector('.m-bar-wrap');
     const bar     = el.querySelector('.m-bar');
     const status  = el.querySelector('.m-status');
-    const dlBtn   = el.querySelector('.m-dl-btn');
 
     if (barWrap) { barWrap.style.display = 'block'; }
-    if (bar)     { bar.style.width = percent + '%'; }
-    if (status)  { status.style.display = 'block'; status.textContent = text; }
-    if (dlBtn)   { dlBtn.style.display = 'none'; } // hide button while downloading
+    if (bar)     { bar.style.width = percent + '%'; bar.style.animation = 'none'; }
+    if (status)  { status.style.display = 'block'; status.textContent = text; status.style.color = '#64748b'; }
 }
 
 function setItemSize(thumbId, totalMb) {
@@ -196,28 +181,19 @@ function setItemSize(thumbId, totalMb) {
 
 function setItemDone(thumbId, filename) {
     const el = getItem(thumbId); if (!el) return;
-    const bar    = el.querySelector('.m-bar');
-    const status = el.querySelector('.m-status');
-    const dlBtn  = el.querySelector('.m-dl-btn');
-    if (bar)    { bar.style.width = '100%'; bar.style.background = '#22c55e'; }
+    const bar     = el.querySelector('.m-bar');
+    const status  = el.querySelector('.m-status');
+    if (bar)    { bar.style.width = '100%'; bar.style.background = '#22c55e'; bar.style.animation = 'none'; }
     if (status) { status.textContent = '✅ ¡Descargado!'; status.style.color = '#22c55e'; }
-    if (dlBtn)  { dlBtn.style.display = 'none'; }
 }
 
 function setItemError(thumbId, error) {
     const el = getItem(thumbId); if (!el) return;
-    const bar    = el.querySelector('.m-bar');
-    const status = el.querySelector('.m-status');
-    const dlBtn  = el.querySelector('.m-dl-btn');
-    if (bar)    { bar.style.width = '100%'; bar.style.background = '#ef4444'; }
+    const bar     = el.querySelector('.m-bar');
+    const status  = el.querySelector('.m-status');
+    if (bar)    { bar.style.width = '100%'; bar.style.background = '#ef4444'; bar.style.animation = 'none'; }
     if (status) { status.textContent = '⛔ ' + error; status.style.color = '#ef4444'; }
-    if (dlBtn)  { dlBtn.style.display = 'flex'; dlBtn.disabled = false; }
 }
-
-// Spin animation for loading states
-const style = document.createElement('style');
-style.textContent = '@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
-document.head.appendChild(style);
 
 // ── PARTICLES VIVO EFECT ──
 function initParticles() {

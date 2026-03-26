@@ -47,13 +47,11 @@
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-                    let bin = '';
-                    const len = value.byteLength;
-                    for (let i = 0; i < len; i++) bin += String.fromCharCode(value[i]);
+                    const chunkArray = Array.from(value);
                     window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
-                        detail: { action: 'relay-chunk', data: { downloadId, base64: btoa(bin) } }
+                        detail: { action: 'relay-chunk', data: { downloadId, chunk: chunkArray } }
                     }));
-                    received += len;
+                    received += value.byteLength;
                     const pct = total ? (received / total) * 100 : Math.min(10 + received / 2097152 * 85, 95);
                     window.dispatchEvent(new CustomEvent(`TelDownloadEvent_${extId}`, {
                         detail: { action: 'panel-download-progress', data: { thumbId, percent: Math.floor(pct), receivedMb: (received / 1048576).toFixed(1) } }
