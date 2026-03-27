@@ -445,9 +445,9 @@
     }
 
     // ══════════════════════════════════════════
-    // ── DOM scan with MutationObserver ──
+    // ── DOM scan with setInterval ──
     // ══════════════════════════════════════════
-    const SEL = '.media-inner, .album-item, .media-photo';
+    const SEL = '.media-inner, .album-item, .media-photo, .MediaViewerSlide, .media-viewer-aspecter';
     const VID_SIG = 'video, .video-time, .media-video-time, .icon-large-play, .icon-play';
 
     function scan() {
