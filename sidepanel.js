@@ -242,13 +242,17 @@ function setupAuthListeners() {
     btnRegister.onclick = () => showAuthForm('register');
     btnBack.onclick     = () => showWelcome();
     
-    document.getElementById('upgrade-btn').onclick = async () => {
-        const session = await SupabaseClient.getSession();
-        if (session && session.user) {
-            const checkoutUrl = `https://whop.com/checkout/prod_SlsIAfQpHG4GW/?metadata[supabase_user_id]=${session.user.id}`;
-            window.open(checkoutUrl, '_blank');
-        }
-    };
+    const upgradeBtn = document.getElementById('upgrade-btn');
+    if (upgradeBtn) {
+        upgradeBtn.onclick = async () => {
+            const session = await SupabaseClient.getSession();
+            if (session && session.user) {
+                // Building the automated Checkout link with the User ID
+                const checkoutUrl = `https://whop.com/checkout/prod_SlsIAfQpHG4GW/?metadata[supabase_user_id]=${session.user.id}`;
+                window.open(checkoutUrl, '_blank');
+            }
+        };
+    }
     
     btnToggle.onclick = () => {
         isLoginMode = !isLoginMode;
@@ -288,7 +292,7 @@ async function updateQuota(count) {
     const ring = document.getElementById('circle-fill');
     const promo = document.getElementById('premium-promo-box');
 
-    // Check if user is PRO
+    // Check plan status
     let isPro = false;
     try {
         const p = await SupabaseClient.getProfile();
@@ -299,7 +303,7 @@ async function updateQuota(count) {
         if (el) el.textContent = '∞';
         if (ring_of) ring_of.textContent = dict.remaining_unlimited;
         if (rem_wrap) rem_wrap.innerHTML = `<span style="color:var(--primary); font-weight:700;">PRO ACTIVADO</span> — ${dict.remaining_unlimited}`;
-        if (promo) promo.classList.add('hidden'); // Hide upgrade button for PRO users
+        if (promo) promo.classList.add('hidden'); // Hide "Subir a Premium" for PRO users
         if (ring) {
             const r = 44, circ = 2 * Math.PI * r;
             ring.style.strokeDasharray = circ;
