@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Misil - Telegram Downloader",
-  "version": "4.0.0",
+  "version": "4.5.4",
   "description": "Download permitted media from Telegram Web with one click.",
   "permissions": [
     "storage",

@@ -25,7 +25,9 @@ const TRANSLATIONS = {
         dashboard_title: "Tus Descargas",
         ring_of: "de",
         remaining_prefix: "Te quedan",
-        remaining_suffix: "descargas este mes"
+        remaining_suffix: "descargas este mes",
+        remaining_unlimited: "Descargas Ilimitadas",
+        btn_upgrade: "Subir a Premium"
     },
     en: {
         welcome_title: "The best Telegram Web downloader",
@@ -48,7 +50,9 @@ const TRANSLATIONS = {
         dashboard_title: "Your Downloads",
         ring_of: "of",
         remaining_prefix: "You have",
-        remaining_suffix: "downloads this month"
+        remaining_suffix: "downloads this month",
+        remaining_unlimited: "Unlimited Downloads",
+        btn_upgrade: "Upgrade to Premium"
     },
     ru: {
         welcome_title: "Лучший загрузчик для Telegram Web",
@@ -71,7 +75,9 @@ const TRANSLATIONS = {
         dashboard_title: "Ваши загрузки",
         ring_of: "из",
         remaining_prefix: "У вас осталось",
-        remaining_suffix: "загрузок в этом месяце"
+        remaining_suffix: "загрузок в этом месяце",
+        remaining_unlimited: "Безлимитно",
+        btn_upgrade: "Стать Premium"
     },
     hi: {
         welcome_title: "टेलीग्राम वेब के लिए सबसे अच्छा डाउनलोडर",
@@ -94,7 +100,9 @@ const TRANSLATIONS = {
         dashboard_title: "आपके डाउनलोड",
         ring_of: "में से",
         remaining_prefix: "आपके पास हैं",
-        remaining_suffix: "इस महीने डाउनलोड"
+        remaining_suffix: "इस महीने डाउनलोड",
+        remaining_unlimited: "असीमित डाउनलोड",
+        btn_upgrade: "प्रीमियम में बदलें"
     }
 };
 
@@ -146,7 +154,7 @@ async function updateLanguage() {
         // Also refresh tag
         const session = await SupabaseClient.getSession();
         if (session) {
-            const plan = (p && p.plan === 'premium') ? 'premium' : 'free';
+            const plan = (p && p.plan === 'pro') ? 'premium' : 'free';
             setTag(dict['plan_' + plan], true);
         }
     } catch { /* session might not be ready */ }
@@ -188,7 +196,6 @@ async function showDashboard() {
     document.getElementById('welcome-view').classList.add('hidden');
     document.getElementById('auth-view').classList.add('hidden');
     document.getElementById('dashboard-view').classList.remove('hidden');
-    setTag('GRATIS', true);
 
     const session = await SupabaseClient.getSession();
     if (session && session.user && session.user.email) {
@@ -200,17 +207,16 @@ async function showDashboard() {
     try {
         const p = await SupabaseClient.getProfile();
         if (p) {
-            updateQuota(p.download_count || 0);
-            const planKey = (p.plan === 'premium') ? 'plan_premium' : 'plan_free';
+            await updateQuota(p.download_count || 0);
+            const planKey = (p.plan === 'pro') ? 'plan_premium' : 'plan_free';
             setTag(TRANSLATIONS[currentLang][planKey], true);
         }
     } catch { /* keep defaults */ }
 }
 
 function showAuth() { showWelcome(); } // Legacy helper
-
 function setTag(text, active) {
-    const ids = ['plan-tag', 'plan-tag-auth'];
+    const ids = ['plan-tag'];
     ids.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -236,6 +242,14 @@ function setupAuthListeners() {
     btnRegister.onclick = () => showAuthForm('register');
     btnBack.onclick     = () => showWelcome();
     
+    document.getElementById('upgrade-btn').onclick = async () => {
+        const session = await SupabaseClient.getSession();
+        if (session && session.user) {
+            const checkoutUrl = `https://whop.com/checkout/prod_SlsIAfQpHG4GW/?metadata[supabase_user_id]=${session.user.id}`;
+            window.open(checkoutUrl, '_blank');
+        }
+    };
+    
     btnToggle.onclick = () => {
         isLoginMode = !isLoginMode;
         updateAuthStrings();
@@ -259,30 +273,50 @@ function setupAuthListeners() {
 
     document.getElementById('logout-btn').onclick = async () => {
         await SupabaseClient.signOut();
-        showAuth();
+        showWelcome();
     };
 }
 
 // ── Quota ring ──
-function updateQuota(count) {
+async function updateQuota(count) {
     const limit = 100;
     const dict = TRANSLATIONS[currentLang];
+    
     const el = document.getElementById('current-count');
     const rem_wrap = document.getElementById('remaining-wrap');
     const ring_of = document.getElementById('ring-of');
     const ring = document.getElementById('circle-fill');
+    const promo = document.getElementById('premium-promo-box');
 
-    if (el) el.textContent = count;
-    if (ring_of) ring_of.textContent = dict.ring_of + ' ' + limit;
-    
-    if (rem_wrap) {
-        rem_wrap.innerHTML = `${dict.remaining_prefix} <strong id="remaining-count" style="color:var(--primary)">${Math.max(0, limit - count)}</strong> ${dict.remaining_suffix}`;
-    }
+    // Check if user is PRO
+    let isPro = false;
+    try {
+        const p = await SupabaseClient.getProfile();
+        if (p && p.plan === 'pro') isPro = true;
+    } catch { /* session might not be ready */ }
 
-    if (ring) {
-        const r = 44, circ = 2 * Math.PI * r;
-        ring.style.strokeDasharray = circ;
-        ring.style.strokeDashoffset = circ - (count / limit) * circ;
+    if (isPro) {
+        if (el) el.textContent = '∞';
+        if (ring_of) ring_of.textContent = dict.remaining_unlimited;
+        if (rem_wrap) rem_wrap.innerHTML = `<span style="color:var(--primary); font-weight:700;">PRO ACTIVADO</span> — ${dict.remaining_unlimited}`;
+        if (promo) promo.classList.add('hidden'); // Hide upgrade button for PRO users
+        if (ring) {
+            const r = 44, circ = 2 * Math.PI * r;
+            ring.style.strokeDasharray = circ;
+            ring.style.strokeDashoffset = 0; // Full red ring for PRO
+        }
+    } else {
+        if (promo) promo.classList.remove('hidden');
+        if (el) el.textContent = count;
+        if (ring_of) ring_of.textContent = dict.ring_of + ' ' + limit;
+        if (rem_wrap) {
+            rem_wrap.innerHTML = `${dict.remaining_prefix} <strong id="remaining-count" style="color:var(--primary)">${Math.max(0, limit - count)}</strong> ${dict.remaining_suffix}`;
+        }
+        if (ring) {
+            const r = 44, circ = 2 * Math.PI * r;
+            ring.style.strokeDasharray = circ;
+            ring.style.strokeDashoffset = circ - (Math.min(count, limit) / limit) * circ;
+        }
     }
 }
 
