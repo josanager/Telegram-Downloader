@@ -22,6 +22,15 @@ async function showDashboard() {
     document.getElementById('auth-view').classList.add('hidden');
     document.getElementById('dashboard-view').classList.remove('hidden');
     setTag('GRATIS', true);
+
+    const session = await SupabaseClient.getSession();
+    if (session && session.user && session.user.email) {
+        let rawUsername = session.user.email.split('@')[0];
+        // Capitalize first letter of username
+        let username = rawUsername.charAt(0).toUpperCase() + rawUsername.slice(1);
+        document.getElementById('user-name').textContent = username;
+        document.getElementById('user-avatar').textContent = username.charAt(0);
+    }
     try {
         const p = await SupabaseClient.getProfile();
         if (p) {
