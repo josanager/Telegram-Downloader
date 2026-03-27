@@ -384,7 +384,12 @@
     // ══════════════════════════════════════════════════
     // ── Main download flow ──
     // ══════════════════════════════════════════════════
+    let isDownloading = false;
+
     async function handleClick(media, isVid) {
+        if (isDownloading) return;
+        isDownloading = true;
+
         const prefix = isVid ? 'video' : 'foto';
         const filenameBase = 'telegram_' + prefix + '_' + Date.now();
 
@@ -405,6 +410,7 @@
                 };
                 toast(msgs[quota.error] || 'Error de cuota', 'error');
                 if (quota.error === 'not_authenticated') send('open-login');
+                isDownloading = false;
                 return;
             }
 
@@ -418,7 +424,6 @@
             }
 
             // Step 3: Open viewer
-            toast('Procesando…', 'info');
             const target = media.querySelector('img.full-media, video, img, .full-media') || media;
             target.click();
 
@@ -434,6 +439,7 @@
                 closeViewer(null);
                 toast('No se encontró URL descargable', 'error');
                 refundCredit();
+                isDownloading = false;
                 return;
             }
 
@@ -468,6 +474,8 @@
             console.error('[Misil] Error general:', err);
             toast('Error: ' + err.message, 'error');
             refundCredit();
+        } finally {
+            isDownloading = false;
         }
     }
 
