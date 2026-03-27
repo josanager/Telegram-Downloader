@@ -159,6 +159,14 @@
             border-radius: var(--radius);
             padding: 24px 20px;
         }
+        .auth-desc {
+            text-align: center;
+            font-size: 14px;
+            color: var(--text-muted);
+            font-weight: 700; /* Bolder text for visibility */
+            margin-bottom: 18px;
+            letter-spacing: -0.2px;
+        }
         .field {
             position: relative;
             margin-bottom: 12px;
@@ -431,6 +439,7 @@
 
     <!-- WELCOME VIEW -->
     <div id="welcome-view" class="hidden">
+        <img src="icons/icon128.png" alt="Logo Misil" style="width: 130px; height: 130px; margin-bottom: 10px;">
         <h1 class="hero-title" data-i18n="welcome_title">El mejor descargador para Telegram Web</h1>
         <button class="btn-large" id="welcome-login-btn" data-i18n="btn_login">Iniciar Sesión</button>
         <button class="btn-large" id="welcome-register-btn" data-i18n="btn_register" style="background: var(--surface); border: 1px solid var(--border);">Registrarse</button>
