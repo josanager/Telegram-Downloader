@@ -452,14 +452,13 @@
 
     function scan() {
         document.querySelectorAll(SEL).forEach(m => {
-            // Virtual Scrolling Fix: Check for physical button existence instead of dataset marking.
-            // React recycles .media-inner containers, so dataset markers will wrongfully persist.
+            // Skip if button already present
             if (m.querySelector('.tmd-dl-btn')) return;
 
-            const isV = !!m.querySelector(VID_SIG);
-            const isI = !isV && !!m.querySelector('img');
-            if (!isV && !isI) return;
-            
+            // Inject button into ALL media containers unconditionally.
+            // Telegram lazy-loads media: many containers only have a CSS-background
+            // thumbnail until scrolled into view, so checking for img/video here
+            // would skip them. Media type is detected at click time instead.
             if (getComputedStyle(m).position === 'static') m.style.position = 'relative';
 
             const btn = document.createElement('div');
@@ -471,7 +470,7 @@
                 btn.classList.add('tmd-dl-btn--pulse');
                 setTimeout(() => btn.classList.remove('tmd-dl-btn--pulse'), 600);
                 
-                // Recalculate isV on click, just in case React recycled the container without dropping the button
+                // Detect media type at click time (when Telegram has fully loaded the element)
                 const currentIsV = !!m.querySelector(VID_SIG);
                 handleClick(m, currentIsV);
             }, true);
