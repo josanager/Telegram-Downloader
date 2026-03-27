@@ -480,23 +480,18 @@
         });
     }
 
-    let debounce = null;
-    let observer = null;
+    let scanInterval = null;
 
     function startScanning() {
-        if (observer) return;
-        scan();
-        observer = new MutationObserver(() => {
-            if (debounce) clearTimeout(debounce);
-            debounce = setTimeout(scan, 300);
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
+        if (scanInterval) return;
+        scan(); // run once immediately
+        scanInterval = setInterval(scan, 500);
     }
 
     function stopScanning() {
-        if (observer) {
-            observer.disconnect();
-            observer = null;
+        if (scanInterval) {
+            clearInterval(scanInterval);
+            scanInterval = null;
         }
         document.querySelectorAll('.tmd-dl-btn').forEach(b => b.remove());
     }
