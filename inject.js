@@ -16,27 +16,57 @@
     const contentRangeRegex = /^bytes (\d+)-(\d+)\/(\d+)$/;
 
     // ── Toast overlay ──
+    let toastTimer = null;
     function toast(text, type) {
         let el = document.getElementById('misil-toast');
-        if (el) el.remove();
-        el = document.createElement('div');
-        el.id = 'misil-toast';
-        el.textContent = text;
-        // Info (processing) is dark bg with red text. Success/Error are red bg with white text. No translucency.
-        const bg = { info: 'rgb(30,39,64)', success: 'rgb(255,55,55)', error: 'rgb(255,55,55)' };
-        const fg = { info: 'rgb(255,55,55)', success: '#ffffff', error: '#ffffff' };
-        const bd = { info: 'rgb(255,55,55)', success: '#ffffff', error: '#ffffff' };
+        const isUpdate = !!el;
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'misil-toast';
+            document.body.appendChild(el);
+        }
+        
+        // Background #150000 (deep red) with theme-red text
+        const bg = { info: '#150000', success: '#150000', error: '#FF3737' };
+        const fg = { info: '#FF3737', success: '#FF3737', error: '#ffffff' };
+        const bd = { info: '#FF3737', success: '#FF3737', error: '#ffffff' };
+        
         Object.assign(el.style, {
-            position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
-            padding: '12px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: '600',
+            position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
+            padding: '14px 28px', borderRadius: '14px', fontSize: '18px', fontWeight: '900',
             fontFamily: 'Inter,system-ui,sans-serif', zIndex: '2147483647', pointerEvents: 'none',
             background: bg[type] || bg.info, color: fg[type] || fg.info,
-            border: '2px solid ' + (bd[type] || bd.info), opacity: '0', transition: 'opacity .25s',
-            boxShadow: '0 8px 16px rgba(0,0,0,0.3)'
+            border: '2px solid ' + (bd[type] || bd.info), opacity: '0', 
+            transition: 'opacity .2s, transform .2s',
+            boxShadow: '0 12px 24px rgba(0,0,0,0.5)',
+            textAlign: 'center'
         });
-        document.body.appendChild(el);
-        requestAnimationFrame(() => { el.style.opacity = '1'; });
-        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 4000);
+
+        el.textContent = text;
+        
+        if (!isUpdate) {
+            requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateX(-50%) translateY(-5px)'; });
+        } else {
+            el.style.opacity = '1';
+        }
+
+        if (toastTimer) clearTimeout(toastTimer);
+        
+        // Types success/error disappear automatically. info stays until manually cleared or new toast comes.
+        if (type !== 'info') {
+            toastTimer = setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => { if (el.parentNode) el.remove(); }, 300);
+            }, type === 'success' ? 1000 : 4000);
+        }
+    }
+
+    function hideToast() {
+        const el = document.getElementById('misil-toast');
+        if (el) {
+            el.style.opacity = '0';
+            setTimeout(() => { if (el.parentNode) el.remove(); }, 300);
+        }
     }
 
     // ── Messaging helpers ──
@@ -172,7 +202,7 @@
                     }
 
                     const pct = Math.round((_next_offset * 100) / _total_size);
-                    toast('Procesando… ' + pct + '%', 'info');
+                    toast(pct + '%', 'info');
 
                     if (_next_offset < _total_size) {
                         fetchNextPart(); // Recursive: get next chunk
@@ -415,9 +445,8 @@
             if (!isVid) {
                 // ── PHOTO: Direct anchor download (tel_download_image pattern) ──
                 try {
-                    toast('Procesando foto…', 'info');
                     tel_download_image(captured.url, filenameBase);
-                    toast('✅ proceso terminado proceso finalizado', 'success');
+                    hideToast(); // Just close
                 } catch (err) {
                     console.error('[Misil] Image download error:', err);
                     toast('Error: ' + err.message, 'error');
@@ -426,10 +455,8 @@
             } else {
                 // ── VIDEO: Range-header chunked fetch (tel_download_video pattern) ──
                 try {
-                    toast('Procesando video…', 'info');
                     const size = await tel_download_video(captured.url, filenameBase);
-                    const sizeMB = (size / (1024 * 1024)).toFixed(1);
-                    toast('✅ proceso terminado proceso finalizado (' + sizeMB + ' MB)', 'success');
+                    hideToast(); // Just close
                 } catch (err) {
                     console.error('[Misil] Video download error:', err);
                     toast('Error: ' + err.message, 'error');
