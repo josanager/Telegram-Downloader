@@ -19,7 +19,13 @@ const TRANSLATIONS = {
         instructions: "Usa el icono de Misil en Telegram<br>para descargar archivos multimedia.<br>Las descargas se guardan en tu carpeta local.",
         btn_logout: "Cerrar Sesión",
         btn_submit_login: "Entrar",
-        btn_submit_register: "Crear Cuenta"
+        btn_submit_register: "Crear Cuenta",
+        plan_free: "GRATIS",
+        plan_premium: "PREMIUM",
+        dashboard_title: "Tus Descargas",
+        ring_of: "de",
+        remaining_prefix: "Te quedan",
+        remaining_suffix: "descargas este mes"
     },
     en: {
         welcome_title: "The best Telegram Web downloader",
@@ -36,7 +42,13 @@ const TRANSLATIONS = {
         instructions: "Use the Misil icon in Telegram<br>to download media files.<br>Downloads are saved to your local folder.",
         btn_logout: "Logout",
         btn_submit_login: "Sign In",
-        btn_submit_register: "Create Account"
+        btn_submit_register: "Create Account",
+        plan_free: "FREE",
+        plan_premium: "PREMIUM",
+        dashboard_title: "Your Downloads",
+        ring_of: "of",
+        remaining_prefix: "You have",
+        remaining_suffix: "downloads this month"
     },
     ru: {
         welcome_title: "Лучший загрузчик для Telegram Web",
@@ -53,7 +65,13 @@ const TRANSLATIONS = {
         instructions: "Используйте значок Misil в Telegram,<br>чтобы скачивать медиафайлы.<br>Файлы сохраняются в локальную папку.",
         btn_logout: "Выйти",
         btn_submit_login: "Войти",
-        btn_submit_register: "Создать аккаунт"
+        btn_submit_register: "Создать аккаунт",
+        plan_free: "БЕСПЛАТНО",
+        plan_premium: "ПРЕМИУМ",
+        dashboard_title: "Ваши загрузки",
+        ring_of: "из",
+        remaining_prefix: "У вас осталось",
+        remaining_suffix: "загрузок в этом месяце"
     },
     hi: {
         welcome_title: "टेलीग्राम वेब के लिए सबसे अच्छा डाउनलोडर",
@@ -70,7 +88,13 @@ const TRANSLATIONS = {
         instructions: "टेलीग्राम में मिसिल आइकन का उपयोग करें<br>मीडिया फ़ाइलों को डाउनलोड करने के लिए।<br>डाउनलोड आपके स्थानीय फ़ोल्डर में सहेजे जाते हैं।",
         btn_logout: "लॉगआउट",
         btn_submit_login: "साइन इन करें",
-        btn_submit_register: "खाता बनाएँ"
+        btn_submit_register: "खाता बनाएँ",
+        plan_free: "मुफ्त",
+        plan_premium: "प्रीमियम",
+        dashboard_title: "आपके डाउनलोड",
+        ring_of: "में से",
+        remaining_prefix: "आपके पास हैं",
+        remaining_suffix: "इस महीने डाउनलोड"
     }
 };
 
@@ -87,15 +111,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 function initI18n() {
     const select = document.getElementById('lang-select');
     select.value = currentLang;
-    select.onchange = (e) => {
+    select.onchange = async (e) => {
         currentLang = e.target.value;
         localStorage.setItem('misil_lang', currentLang);
-        updateLanguage();
+        await updateLanguage();
     };
     updateLanguage();
 }
 
-function updateLanguage() {
+async function updateLanguage() {
     const dict = TRANSLATIONS[currentLang];
     
     // Update data-i18n items
@@ -112,6 +136,20 @@ function updateLanguage() {
 
     // Special case: update submit button text based on mode
     updateAuthStrings();
+
+    // Re-run quota update to refresh remaining text with new language
+    try {
+        const p = await SupabaseClient.getProfile();
+        if (p) updateQuota(p.download_count || 0);
+        else updateQuota(0);
+        
+        // Also refresh tag
+        const session = await SupabaseClient.getSession();
+        if (session) {
+            const plan = (p && p.plan === 'premium') ? 'premium' : 'free';
+            setTag(dict['plan_' + plan], true);
+        }
+    } catch { /* session might not be ready */ }
 }
 
 // ── Views ──
@@ -163,7 +201,8 @@ async function showDashboard() {
         const p = await SupabaseClient.getProfile();
         if (p) {
             updateQuota(p.download_count || 0);
-            setTag(p.plan === 'premium' ? 'PREMIUM' : 'GRATIS', true);
+            const planKey = (p.plan === 'premium') ? 'plan_premium' : 'plan_free';
+            setTag(TRANSLATIONS[currentLang][planKey], true);
         }
     } catch { /* keep defaults */ }
 }
@@ -227,11 +266,19 @@ function setupAuthListeners() {
 // ── Quota ring ──
 function updateQuota(count) {
     const limit = 100;
+    const dict = TRANSLATIONS[currentLang];
     const el = document.getElementById('current-count');
-    const rem = document.getElementById('remaining-count');
+    const rem_wrap = document.getElementById('remaining-wrap');
+    const ring_of = document.getElementById('ring-of');
     const ring = document.getElementById('circle-fill');
+
     if (el) el.textContent = count;
-    if (rem) rem.textContent = Math.max(0, limit - count);
+    if (ring_of) ring_of.textContent = dict.ring_of + ' ' + limit;
+    
+    if (rem_wrap) {
+        rem_wrap.innerHTML = `${dict.remaining_prefix} <strong id="remaining-count" style="color:var(--primary)">${Math.max(0, limit - count)}</strong> ${dict.remaining_suffix}`;
+    }
+
     if (ring) {
         const r = 44, circ = 2 * Math.PI * r;
         ring.style.strokeDasharray = circ;
