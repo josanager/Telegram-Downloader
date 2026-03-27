@@ -35,6 +35,11 @@
             document.head.appendChild(link);
         }
 
+        // Background #150000 (deep red) with theme-red text
+        const bg = { info: '#150000', success: '#150000', error: '#FF3737' };
+        const fg = { info: '#FF3737', success: '#FF3737', error: '#ffffff' };
+        const bd = { info: '#FF3737', success: '#FF3737', error: '#ffffff' };
+
         Object.assign(el.style, {
             position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
             padding: '14px 28px', borderRadius: '14px', fontSize: '18px', fontWeight: '900',
