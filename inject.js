@@ -26,15 +26,19 @@
             document.body.appendChild(el);
         }
         
-        // Background #150000 (deep red) with theme-red text
-        const bg = { info: '#150000', success: '#150000', error: '#FF3737' };
-        const fg = { info: '#FF3737', success: '#FF3737', error: '#ffffff' };
-        const bd = { info: '#FF3737', success: '#FF3737', error: '#ffffff' };
-        
+        // Ensure the font is loaded in the host page
+        if (!document.getElementById('misil-font')) {
+            const link = document.createElement('link');
+            link.id = 'misil-font';
+            link.rel = 'stylesheet';
+            link.href = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700;900&display=swap';
+            document.head.appendChild(link);
+        }
+
         Object.assign(el.style, {
             position: 'fixed', bottom: '32px', left: '50%', transform: 'translateX(-50%)',
             padding: '14px 28px', borderRadius: '14px', fontSize: '18px', fontWeight: '900',
-            fontFamily: 'Inter,system-ui,sans-serif', zIndex: '2147483647', pointerEvents: 'none',
+            fontFamily: "'Space Grotesk', system-ui, sans-serif", zIndex: '2147483647', pointerEvents: 'none',
             background: bg[type] || bg.info, color: fg[type] || fg.info,
             border: '2px solid ' + (bd[type] || bd.info), opacity: '0', 
             transition: 'opacity .2s, transform .2s',
