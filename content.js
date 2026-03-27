@@ -14,7 +14,7 @@ s.onload = () => s.remove();
 (document.head || document.documentElement).appendChild(s);
 
 // ── Allowed actions from inject.js ──
-const ALLOWED = new Set(['consume-credit', 'refund-credit', 'open-login']);
+const ALLOWED = new Set(['consume-credit', 'refund-credit', 'open-login', 'request-auth-state']);
 
 // ── Validated message handler ──
 window.addEventListener('message', async (e) => {
@@ -43,12 +43,15 @@ window.addEventListener('message', async (e) => {
             reply('consume-result', { allowed: false, error: 'extension_error' });
         }
     }
+    if (m.action === 'request-auth-state') {
+        chrome.storage.local.get(['sb_session'], (res) => {
+            reply('auth-state', { isAuthenticated: !!res.sb_session });
+        });
+        return;
+    }
 });
 
 // ── Auth State Relay ──
-chrome.storage.local.get(['sb_session'], (res) => {
-    reply('auth-state', { isAuthenticated: !!res.sb_session });
-});
 
 chrome.storage.onChanged.addListener((changes) => {
     if (changes.sb_session) {

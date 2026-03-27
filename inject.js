@@ -517,5 +517,8 @@
         }
     });
 
-    console.log('[Misil] v4.5 loaded (Auth-conditional UI + Architecture from Neet-Nestor/Telegram-Media-Downloader)');
+    // Request initial auth state once listeners are ready
+    send('request-auth-state');
+
+    console.log('[Misil] v4.5.2 loaded (Auth-conditional UI + Architecture from Neet-Nestor/Telegram-Media-Downloader)');
 })();
