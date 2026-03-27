@@ -41,10 +41,14 @@ async function showDashboard() {
 }
 
 function setTag(text, active) {
-    const el = document.getElementById('plan-tag');
-    if (!el) return;
-    el.textContent = text;
-    el.classList.toggle('on', active);
+    const ids = ['plan-tag', 'plan-tag-auth'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = text;
+            el.classList.toggle('on', active);
+        }
+    });
 }
 
 // ── Auth listeners ──

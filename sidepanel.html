@@ -11,12 +11,11 @@
             --bg: #150000;
             --surface: #1C0A0A;
             --surface-hover: #2B0F0F;
-            --border: rgba(255,255,255,0.06);
+            --border: rgba(255,55,55,0.08); /* Red tint border */
             --primary: #FF3737;
             --primary-glow: rgba(255,55,55,0.25);
-            --green: #22c55e;
-            --text: #f1f5f9;
-            --text-muted: #64748b;
+            --text: #FFDADA; /* Light red text */
+            --text-muted: #8A5A5A; /* Muted red text */
             --radius: 14px;
         }
 
@@ -38,26 +37,49 @@
         .header {
             display: flex;
             align-items: center;
-            gap: 12px;
+            justify-content: space-between; /* Space out badge and user */
             padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
             margin-bottom: 16px;
         }
-        .header img { width: 38px; height: 38px; }
-        .header-info .title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
         .badge {
-            display: inline-block;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 800;
-            padding: 5px 12px;
+            padding: 4px 10px;
             border-radius: 8px;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 3px;
-            background: #1e2740;
+            letter-spacing: 0.5px;
+            background: #250A0A;
             color: var(--text-muted);
         }
         .badge.on { background: var(--primary); color: white; box-shadow: 0 0 15px var(--primary-glow); }
+
+        /* User Profile in Header */
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            font-size: 14px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 10px var(--primary-glow);
+            text-transform: uppercase;
+        }
+        .user-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+            max-width: 80px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
 
         /* ── AUTH VIEW ── */
         #auth-view {
@@ -181,33 +203,32 @@
             letter-spacing: -0.2px;
         }
 
-        /* Quota */
+        /* Quota (Big Ring Layout) */
         .quota-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 32px 24px;
+            background: transparent;
+            border: none;
+            padding: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 24px;
+            gap: 20px;
             text-align: center;
         }
-        .ring-wrap { position: relative; width: 140px; height: 140px; flex-shrink: 0; }
+        .ring-wrap { position: relative; width: 220px; height: 220px; flex-shrink: 0; }
         .ring-wrap svg { transform: rotate(-90deg); width: 100%; height: 100%; }
         .ring-wrap circle { fill: none; stroke-linecap: round; }
-        .ring-bg { stroke: #1e2740; stroke-width: 8; }
-        .ring-fill { stroke: var(--primary); stroke-width: 8; transition: stroke-dashoffset 0.6s ease; }
+        .ring-bg { stroke: rgba(255,55,55,0.05); stroke-width: 6; }
+        .ring-fill { stroke: var(--primary); stroke-width: 6; transition: stroke-dashoffset 0.6s ease; }
         .ring-label {
-            position: absolute; top: 50%; left: 50%;
+            position: absolute; top: 52%; left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
         }
-        .ring-val { font-size: 42px; font-weight: 900; display: block; line-height: 1; color: white; }
-        .ring-sub { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 4px; display: block; }
-        .quota-text { width: 100%; }
-        .quota-text .qt-title { font-size: 18px; font-weight: 800; margin-bottom: 6px; color: white; }
+        .ring-val { font-size: 64px; font-weight: 900; display: block; line-height: 1; color: white; margin-bottom: 4px; }
+        .ring-sub { font-size: 14px; color: var(--text-muted); font-weight: 700; display: block; }
+        .quota-text { width: 100%; margin-top: 10px; }
+        .quota-text .qt-title { font-size: 20px; font-weight: 800; margin-bottom: 4px; color: white; }
         .quota-text .qt-sub { font-size: 14px; color: var(--text-muted); line-height: 1.4; }
 
         /* Tab Switcher */
@@ -363,13 +384,12 @@
 </head>
     <canvas id="particles-bg" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.5; pointer-events: none;"></canvas>
 
-    <!-- HEADER (only tag) -->
-    <div class="header" style="border-bottom: none; justify-content: flex-start; margin-bottom: 0;">
-        <span class="badge" id="plan-tag" style="margin-left: -6px; padding: 4px 10px; font-size: 10px; border-radius: 8px;">Desconectado</span>
-    </div>
-
     <!-- AUTH VIEW -->
     <div id="auth-view" class="hidden">
+        <!-- Minimal Badge for Auth View -->
+        <div style="margin-bottom: 24px; display: flex; justify-content: flex-start;">
+            <span class="badge" id="plan-tag-auth">Desconectado</span>
+        </div>
         <div class="auth-card">
             <div class="auth-tabs">
                 <div class="auth-tab active" id="tab-login">Entrar</div>
@@ -392,13 +412,16 @@
     <!-- DASHBOARD VIEW -->
     <div id="dashboard-view" class="hidden">
         
-        <!-- User Profile -->
-        <div class="user-profile">
-            <div class="user-avatar" id="user-avatar">?</div>
-            <div class="user-name" id="user-name">Usuario</div>
+        <!-- Header Row (within dashboard) -->
+        <div class="header" style="padding-top: 4px;">
+            <span class="badge" id="plan-tag">Desconectado</span>
+            <div class="user-profile">
+                <div class="user-avatar" id="user-avatar">?</div>
+                <div class="user-name" id="user-name">Usuario</div>
+            </div>
         </div>
 
-        <!-- Quota Card -->
+        <!-- Quota Section -->
         <div class="quota-card">
             <div class="ring-wrap">
                 <svg viewBox="0 0 100 100">
