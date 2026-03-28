@@ -14,6 +14,7 @@
     if (!NONCE || !ICON) return;
 
     const contentRangeRegex = /^bytes (\d+)-(\d+)\/(\d+)$/;
+    const FREE_MAX_BYTES = 500 * 1024 * 1024;
 
     // ── Toast overlay ──
     let toastTimer = null;
@@ -100,6 +101,38 @@
 
     function refundCredit() {
         send('refund-credit');
+    }
+
+    function parseTotalFromContentRange(header) {
+        if (!header) return null;
+        const m = header.match(contentRangeRegex);
+        if (!m) return null;
+        const total = parseInt(m[3], 10);
+        return Number.isFinite(total) ? total : null;
+    }
+
+    async function probeMediaSize(url, isVid) {
+        try {
+            const rangeRes = await fetch(url, { method: 'GET', headers: { 'Range': 'bytes=0-0' } });
+            if (rangeRes.ok || rangeRes.status === 206) {
+                const totalFromRange = parseTotalFromContentRange(rangeRes.headers.get('Content-Range'));
+                if (totalFromRange) return totalFromRange;
+                const len = parseInt(rangeRes.headers.get('Content-Length') || '0', 10);
+                if (Number.isFinite(len) && len > 0) return len;
+            }
+        } catch {}
+
+        if (!isVid) {
+            try {
+                const headRes = await fetch(url, { method: 'HEAD' });
+                if (headRes.ok) {
+                    const len = parseInt(headRes.headers.get('Content-Length') || '0', 10);
+                    if (Number.isFinite(len) && len > 0) return len;
+                }
+            } catch {}
+        }
+
+        return null;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -455,6 +488,24 @@
             // Step 5: Close viewer FIRST, then download
             closeViewer(captured.viewer);
             await new Promise(r => setTimeout(r, 400));
+
+            // Step 5.1: Free plan max file size = 500MB (photos/videos)
+            const isPaidPlan = Number(quota?.remaining) === 9999;
+            if (!isPaidPlan) {
+                const remoteSize = await probeMediaSize(captured.url, isVid);
+                if (remoteSize === null) {
+                    toast('No se pudo verificar tamaño. Plan gratis: hasta 500MB por archivo', 'error');
+                    refundCredit();
+                    isDownloading = false;
+                    return;
+                }
+                if (remoteSize > FREE_MAX_BYTES) {
+                    toast('Plan gratis: máximo 500MB por archivo', 'error');
+                    refundCredit();
+                    isDownloading = false;
+                    return;
+                }
+            }
 
             // Step 6: Download
             if (!isVid) {

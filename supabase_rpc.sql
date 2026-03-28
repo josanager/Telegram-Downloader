@@ -23,7 +23,13 @@ BEGIN
         RETURN jsonb_build_object('allowed', false, 'error', 'profile_not_found');
     END IF;
 
-    v_limit := CASE WHEN v_plan = 'premium' THEN 1000 ELSE 100 END;
+    IF v_plan IN ('pro', 'forever') THEN
+        -- Paid plans: unlimited downloads
+        UPDATE profiles SET download_count = download_count + 1 WHERE id = p_user_id;
+        RETURN jsonb_build_object('allowed', true, 'remaining', 9999, 'count', v_count + 1);
+    END IF;
+
+    v_limit := 100;
 
     IF v_count >= v_limit THEN
         RETURN jsonb_build_object('allowed', false, 'error', 'quota_exceeded', 'remaining', 0);
@@ -57,3 +63,7 @@ $$;
 -- 3. Grant execute permissions to authenticated users
 GRANT EXECUTE ON FUNCTION consume_download_credit(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION refund_download_credit(uuid) TO authenticated;
+
+-- 4. Initial Database Setup (Run only if not yet existing)
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS plan text DEFAULT 'free';
+-- UPDATE profiles SET plan = 'free' WHERE plan IS NULL;

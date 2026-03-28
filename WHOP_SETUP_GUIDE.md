@@ -34,13 +34,14 @@ Tu misión es configurar el puente técnico entre **Whop** (Pasarela) y **Supaba
 
 ---
 
-### **3. DATOS DE SALIDA (A entregar al usuario)**
-Una vez completada la navegación y configuración, por favor devuelve estos 4 parámetros exactos para terminar la programación:
+### **3. DATOS DE SALIDA (Configuración Completada)**
 
-1.  **Product ID**: `[ID de Whop]`
-2.  **Whop API Key**: `[Key de Servidor]`
-3.  **Webhook Endpoint**: `[URL de Supabase]`
-4.  **Checkout Base URL**: `[URL para invocar el pago]`
+1.  **Product ID**: `prod_SlsIAfQpHG4GW`
+2.  **Plan ID (Mensual)**: `plan_55VkaAmYwx8cw`
+3.  **Plan ID (Pago Único)**: `plan_KiU8TyxtJZ4c2`
+4.  **Whop API Key**: `apik_d9GJq9YQN6Qc8_C4...`
+5.  **Webhook Endpoint**: `https://cqgpbmxcavdvcvcoojyi.supabase.co/functions/v1/whop-handler`
+6.  **Checkout Base URL**: `https://whop.com/checkout/[PLAN_ID]/?metadata[supabase_user_id]=SUPABASE_USER_ID`
 
 ---
 

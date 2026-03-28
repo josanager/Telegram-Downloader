@@ -60,6 +60,54 @@ class SupabaseClient {
         return rows.length > 0 ? rows[0] : null;
     }
 
+    static async updateAuthUser(payload) {
+        const s = await this.getSession();
+        if (!s) throw new Error('No active session');
+        const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+            method: 'PUT',
+            headers: { ...baseHeaders, 'Authorization': `Bearer ${s.access_token}` },
+            body: JSON.stringify(payload)
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.msg || d.message || d.error_description || d.error || 'Update failed');
+        return d;
+    }
+
+    static async updateUsername(newUsername) {
+        const s = await this.getSession();
+        if (!s?.user?.id) throw new Error('No active session');
+        const safe = String(newUsername || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (!safe) throw new Error('Usuario inválido');
+        const nextEmail = `${safe}@misil.app`;
+        await this.updateAuthUser({ email: nextEmail });
+        await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${s.user.id}`, {
+            method: 'PATCH',
+            headers: { ...baseHeaders, 'Authorization': `Bearer ${s.access_token}` },
+            body: JSON.stringify({ email: nextEmail })
+        }).catch(() => {});
+        const nextSession = { ...s, user: { ...s.user, email: nextEmail } };
+        await this.setSession(nextSession);
+        return nextEmail;
+    }
+
+    static async updatePassword(newPassword) {
+        if (!newPassword || newPassword.length < 6) throw new Error('Mínimo 6 caracteres.');
+        await this.updateAuthUser({ password: newPassword });
+    }
+
+    static async updatePlan(plan) {
+        const s = await this.getSession();
+        if (!s?.user?.id) throw new Error('No active session');
+        const allowed = new Set(['free', 'pro', 'forever']);
+        if (!allowed.has(plan)) throw new Error('Invalid plan');
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${s.user.id}`, {
+            method: 'PATCH',
+            headers: { ...baseHeaders, 'Authorization': `Bearer ${s.access_token}` },
+            body: JSON.stringify({ plan })
+        });
+        if (!r.ok) throw new Error('Plan update failed');
+    }
+
     static async ensureProfile(userId, email) {
         const s = await this.getSession();
         if (!s) return;

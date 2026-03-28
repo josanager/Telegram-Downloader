@@ -39,12 +39,33 @@
             top: 0; left: 0; right: 0;
             padding: 10px 16px;
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             align-items: center;
+            gap: 8px;
             z-index: 1000;
             background: rgba(21,0,0,0.8);
             backdrop-filter: blur(8px);
         }
+        .top-nav-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .icon-btn:hover { border-color: var(--primary); color: white; }
+        .icon-btn svg { width: 16px; height: 16px; fill: currentColor; }
         .lang-select {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -65,9 +86,9 @@
         .header {
             display: flex;
             align-items: center;
-            justify-content: space-between; /* Space out badge and user */
-            padding-bottom: 16px;
-            margin-bottom: 16px;
+            justify-content: flex-start;
+            padding-bottom: 10px;
+            margin-bottom: 8px;
         }
         .badge {
             font-size: 10px;
@@ -163,6 +184,148 @@
             gap: 8px;
         }
         .btn-premium:hover { background: var(--primary); color: white; box-shadow: 0 0 15px var(--primary-glow); }
+        .credits-warning {
+            text-align: center;
+            margin-top: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .subtle {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+        .view-shell {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .view-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 4px;
+        }
+        .view-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: white;
+            letter-spacing: -0.2px;
+        }
+        .secondary-btn {
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .secondary-btn:hover { border-color: var(--primary); color: white; }
+        .plans-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 4px;
+        }
+        .plans-subtitle {
+            margin-top: -2px;
+            margin-bottom: 6px;
+        }
+        .plans-status {
+            min-height: 18px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 4px;
+        }
+        .plan-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+        }
+        .plan-card.current {
+            border-color: rgba(255,55,55,0.45);
+            box-shadow: 0 0 0 1px rgba(255,55,55,0.15), 0 10px 24px rgba(0,0,0,0.18);
+            transform: translateY(-1px);
+        }
+        .plan-name {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+        .plan-card.current .plan-name { color: var(--primary); }
+        .plan-price {
+            font-size: 28px;
+            font-weight: 900;
+            color: white;
+            margin: 4px 0 8px;
+        }
+        .plan-desc {
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.45;
+            margin-bottom: 10px;
+        }
+        .btn-primary.is-current {
+            background: rgba(255, 55, 55, 0.12);
+            color: var(--text);
+            border: 1px solid rgba(255,55,55,0.28);
+            box-shadow: none;
+        }
+        .btn-primary.is-secondary {
+            background: rgba(255,255,255,0.05);
+            color: white;
+            border: 1px solid var(--border);
+            box-shadow: none;
+        }
+        .setting-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px;
+            margin-bottom: 10px;
+        }
+        .setting-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 10px;
+        }
+        .setting-row {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .setting-row input {
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 12px;
+            border-radius: 9px;
+            font-family: inherit;
+            font-size: 13px;
+        }
+        .setting-status {
+            min-height: 18px;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 600;
+        }
 
         .auth-view-title {
             font-size: 26px;
@@ -264,6 +427,22 @@
             font-weight: 600;
             color: white;
             letter-spacing: -0.2px;
+        }
+        #nav-user-profile {
+            padding: 0;
+            gap: 8px;
+        }
+        #nav-user-profile .user-avatar {
+            width: 32px;
+            height: 32px;
+            font-size: 14px;
+        }
+        #nav-user-profile .user-name {
+            max-width: 96px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 14px;
         }
 
         /* Quota (Big Ring Layout) */
@@ -443,18 +622,28 @@
             transition: all 0.2s;
         }
         .logout-btn:hover { color: white; border-color: rgba(255,255,255,0.15); }
-    </style>
+</style>
 </head>
+<body>
     <canvas id="particles-bg" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.5; pointer-events: none;"></canvas>
 
     <!-- NAVIGATION -->
     <div class="top-nav">
-        <select class="lang-select" id="lang-select">
-            <option value="es">ES</option>
-            <option value="en">EN</option>
-            <option value="ru">RU</option>
-            <option value="hi">HI</option>
-        </select>
+        <div class="user-profile hidden" id="nav-user-profile">
+            <div class="user-avatar" id="user-avatar">?</div>
+            <div class="user-name" id="user-name">Usuario</div>
+        </div>
+        <div class="top-nav-right">
+            <button class="icon-btn hidden" id="nav-settings-btn" title="Settings">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.43 7.43 0 0 0 .05-.94 7.43 7.43 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.28 7.28 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.49-.42h-3.84a.5.5 0 0 0-.49.42l-.36 2.54a7.28 7.28 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.43 7.43 0 0 0-.05.94 7.43 7.43 0 0 0 .05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.05.72 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54c.58-.22 1.13-.55 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
+            </button>
+            <select class="lang-select" id="lang-select">
+                <option value="es">ES</option>
+                <option value="en">EN</option>
+                <option value="ru">RU</option>
+                <option value="hi">HI</option>
+            </select>
+        </div>
     </div>
 
     <!-- WELCOME VIEW -->
@@ -489,10 +678,6 @@
         <!-- Header Row (within dashboard) -->
         <div class="header" style="padding-top: 4px;">
             <span class="badge" id="plan-tag">Desconectado</span>
-            <div class="user-profile">
-                <div class="user-avatar" id="user-avatar">?</div>
-                <div class="user-name" id="user-name">Usuario</div>
-            </div>
         </div>
 
         <!-- Quota Section -->
@@ -518,8 +703,10 @@
         <!-- UPGRADE SECTION -->
         <div id="premium-promo-box">
             <button class="btn-premium" id="upgrade-btn">
-                <span>⭐</span> <span data-i18n="btn_upgrade">Subir a Premium</span>
+                <span data-i18n="btn_upgrade">Ver planes</span>
             </button>
+            <div id="credits-warning" class="credits-warning hidden" data-i18n="credits_ended">Se te acabaron los créditos</div>
+            <div class="subtle" data-i18n="plans_hint">Plan gratis: 100 archivos multimedia/mes y hasta 500MB por archivo.</div>
         </div>
 
         <!-- Info/Instructions -->
@@ -537,6 +724,62 @@
         </div>
 
         <button class="logout-btn" id="logout-btn" style="margin-top: auto;" data-i18n="btn_logout">Cerrar Sesión</button>
+    </div>
+
+    <div id="plans-view" class="hidden view-shell">
+        <div class="view-header">
+            <button class="secondary-btn" id="plans-back-btn" data-i18n="btn_back">← Volver</button>
+            <div class="view-title" data-i18n="plans_title">Planes</div>
+            <div style="width: 68px;"></div>
+        </div>
+        <div class="subtle plans-subtitle" id="plans-subtitle" data-i18n="plans_subtitle">Elige el plan que quieres usar en Misil.</div>
+        <div class="plans-status" id="plans-status"></div>
+        <div class="plans-grid">
+            <div class="plan-card" id="plan-card-free">
+                <div class="plan-name" data-i18n="plan_free_name">Free</div>
+                <div class="plan-price" data-i18n="plan_free_price">$0</div>
+                <div class="plan-desc" data-i18n="plan_free_desc">100 archivos multimedia al mes y hasta 500MB por archivo.</div>
+                <button class="btn-primary" id="choose-free-btn" data-i18n="btn_choose_free">Elegir Free</button>
+            </div>
+            <div class="plan-card" id="plan-card-pro">
+                <div class="plan-name" data-i18n="plan_monthly_name">Pro</div>
+                <div class="plan-price" data-i18n="plan_monthly_price">$4.99/mes</div>
+                <div class="plan-desc" data-i18n="plan_monthly_desc">Descargas ilimitadas de fotos y videos, sin límite de tamaño.</div>
+                <button class="btn-primary" id="buy-monthly-btn" data-i18n="btn_choose_pro">Elegir Pro</button>
+            </div>
+            <div class="plan-card" id="plan-card-forever">
+                <div class="plan-name" data-i18n="plan_lifetime_name">Forever</div>
+                <div class="plan-price" data-i18n="plan_lifetime_price">29,99 US$</div>
+                <div class="plan-desc" data-i18n="plan_lifetime_desc">Pago único para siempre con descargas ilimitadas de fotos y videos, sin límite de tamaño.</div>
+                <button class="btn-primary" id="buy-lifetime-btn" data-i18n="btn_choose_forever">Elegir Forever</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="settings-view" class="hidden view-shell">
+        <div class="view-header">
+            <button class="secondary-btn" id="settings-back-btn" data-i18n="btn_back">← Volver</button>
+            <div class="view-title" data-i18n="settings_title">Configuración</div>
+            <div style="width: 68px;"></div>
+        </div>
+        <div class="setting-card">
+            <div class="setting-title" data-i18n="settings_payment_title">Pago y plan</div>
+            <div class="subtle" style="text-align:left; margin-top:0;" data-i18n="settings_payment_desc">Gestiona tu plan mensual o perpetuo.</div>
+            <button class="secondary-btn" id="settings-open-plans-btn" data-i18n="settings_open_plans">Ver planes</button>
+        </div>
+        <div class="setting-card">
+            <div class="setting-title" data-i18n="settings_account_title">Cuenta</div>
+            <div class="setting-row">
+                <input type="text" id="settings-username" data-i18n-attr="placeholder:settings_username_placeholder" placeholder="Nuevo usuario">
+                <button class="secondary-btn" id="settings-save-username-btn" data-i18n="settings_save_username">Guardar usuario</button>
+            </div>
+            <div class="setting-row">
+                <input type="password" id="settings-password" data-i18n-attr="placeholder:settings_password_placeholder" placeholder="Nueva contraseña">
+                <button class="secondary-btn" id="settings-save-password-btn" data-i18n="settings_save_password">Guardar contraseña</button>
+            </div>
+            <div class="setting-status" id="settings-status"></div>
+        </div>
+        <button class="logout-btn" id="settings-logout-btn" data-i18n="btn_logout">Cerrar Sesión</button>
     </div>
 
     <script src="supabase-client.js"></script>

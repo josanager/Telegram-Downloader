@@ -75,7 +75,17 @@ async function manualConsume(session) {
         if (!rows.length) return { allowed: false, error: 'profile_not_found' };
 
         const { download_count: count = 0, plan = 'free' } = rows[0];
-        const limit = plan === 'premium' ? 1000 : 100;
+        if (plan === 'pro' || plan === 'forever') {
+            await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${session.user.id}`, {
+                method: 'PATCH',
+                headers: authHeaders(session.access_token),
+                body: JSON.stringify({ download_count: count + 1 })
+            });
+            await chrome.storage.local.set({ download_count: count + 1 });
+            return { allowed: true, remaining: 9999, count: count + 1 };
+        }
+        
+        const limit = 100;
         if (count >= limit) return { allowed: false, error: 'quota_exceeded', remaining: 0 };
 
         await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${session.user.id}`, {
