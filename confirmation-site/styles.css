@@ -59,7 +59,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: check-pop 2.4s ease-in-out infinite;
 }
 
 .giant-check {
@@ -68,15 +67,24 @@ body {
   filter: drop-shadow(0 0 24px var(--primary-glow));
 }
 
-.giant-check path {
+.check-circle {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 8;
+  transform-origin: center;
+  animation: circle-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.check-path {
   fill: none;
   stroke: var(--primary);
   stroke-width: 11;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-dasharray: 130;
-  stroke-dashoffset: 130;
-  animation: draw-check 2.4s ease-in-out infinite;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: draw-check 0.4s ease-out forwards;
+  animation-delay: 0.5s;
 }
 
 .single-text {
@@ -108,39 +116,11 @@ body {
   transform: translateY(-1px);
 }
 
-@keyframes check-pop {
-  0% {
-    opacity: 0;
-    transform: scale(0.18);
-  }
-  20% {
-    opacity: 1;
-    transform: scale(1.08);
-  }
-  30% {
-    transform: scale(1);
-  }
-  72% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(0.86);
-  }
+@keyframes circle-pop {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 @keyframes draw-check {
-  0% {
-    stroke-dashoffset: 130;
-  }
-  22% {
-    stroke-dashoffset: 0;
-  }
-  72% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: -130;
-  }
+  to { stroke-dashoffset: 0; }
 }
