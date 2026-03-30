@@ -294,6 +294,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch {
         showWelcome();
     }
+
+    // Auto-refresh profile when user returns to extension (e.g. after paying)
+    document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState !== 'visible') return;
+        const session = await SupabaseClient.getSession();
+        if (!session?.user?.id) return;
+        const dashView = document.getElementById('dashboard-view');
+        if (dashView && !dashView.classList.contains('hidden')) {
+            await showDashboard();
+        }
+    });
 });
 
 function initI18n() {
@@ -440,7 +451,9 @@ async function showDashboard(profile) {
     document.getElementById('dashboard-view').classList.remove('hidden');
     await hydrateUserUIFromSession();
 
-    const resolvedProfile = profile || await SupabaseClient.getProfile();
+    // Always fetch fresh profile from Supabase to detect plan changes
+    const freshProfile = await SupabaseClient.getProfile();
+    const resolvedProfile = freshProfile || profile;
     const currentPlan = normalizePlan(resolvedProfile?.plan);
     await updateQuota(resolvedProfile?.download_count || 0, currentPlan);
     setTag(TRANSLATIONS[currentLang][`plan_${currentPlan}`], true);
@@ -548,7 +561,8 @@ async function openCheckout(targetPlan) {
         return;
     }
 
-    const checkoutUrl = `${BASE_URL[ENV]}/${planId}/?metadata[supabase_user_id]=${session.user.id}`;
+    const redirectUrl = encodeURIComponent('https://misil-pago-completado.pages.dev/');
+    const checkoutUrl = `${BASE_URL[ENV]}/${planId}/?metadata[supabase_user_id]=${session.user.id}&redirect_url=${redirectUrl}`;
     window.open(checkoutUrl, '_blank');
     setPlansStatus(TRANSLATIONS[currentLang].plans_payment_pending);
     startPlanPolling(targetPlan);
@@ -566,7 +580,7 @@ function startPlanPolling(targetPlan) {
             setPlansStatus(TRANSLATIONS[currentLang].plans_paid_ready);
             await showDashboard(profile);
         } catch {}
-    }, 3000);
+    }, 2000);
 }
 
 async function handlePlanSelection(plan) {
